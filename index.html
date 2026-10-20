@@ -183,11 +183,13 @@ details[open] summary{margin-bottom:10px}
 
 /* modal */
 .modal{position:fixed;inset:0;z-index:60;background:rgba(15,20,25,.5);display:flex;align-items:center;justify-content:center;padding:16px}
-.modal-box{background:var(--card);border-radius:14px;width:100%;max-width:460px;max-height:92vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.modal-box{background:var(--card);border-radius:14px;width:100%;max-width:460px;max-height:92vh;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);display:flex;flex-direction:column}
 .modal-box.wide{max-width:760px}
-.modal-head{padding:14px 16px 0;font-weight:700;font-size:17px}
-.modal-body{padding:12px 16px;display:grid;gap:10px}
-.modal-foot{padding:0 16px 16px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.modal-head{padding:12px 54px 6px 16px;font-weight:700;font-size:17px;position:relative;flex:none;min-height:44px;display:flex;align-items:center}
+.modal-x{position:absolute;right:8px;top:6px;width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--ink);display:flex;align-items:center;justify-content:center}
+.modal-x .ic{width:18px;height:18px}
+.modal-body{padding:8px 16px 12px;display:grid;gap:10px;overflow:auto;flex:1 1 auto;min-height:0;-webkit-overflow-scrolling:touch}
+.modal-foot{padding:10px 16px calc(12px + env(safe-area-inset-bottom));display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;flex:none;border-top:1px solid var(--line);background:var(--card)}
 .drop{display:block;border:2px dashed var(--line);border-radius:12px;padding:26px 16px;text-align:center;color:var(--muted);cursor:pointer}
 .drop b{display:block;color:var(--ink);margin:4px 0 2px}
 /* pdf viewer */
@@ -203,6 +205,10 @@ details[open] summary{margin-bottom:10px}
 .pdf-full .bar button{background:#3a404a;border:0;color:#fff;border-radius:8px;min-width:38px;height:36px;font-size:16px}
 .pdf-full .pages{flex:1;overflow:auto;display:grid;gap:12px;justify-items:center;padding:12px 12px calc(90px + env(safe-area-inset-bottom));align-content:start;-webkit-overflow-scrolling:touch}
 .pdf-full canvas{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.doc-view .doc-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px 12px calc(90px + env(safe-area-inset-bottom))}
+.doc-view .doc-page{margin:0 auto;overflow:hidden;background:#fff;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.doc-view iframe{display:block;border:0;background:#fff;transform-origin:0 0}
+.pdf-full .bar button{white-space:nowrap;padding:0 10px}
 /* picker */
 .pick{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:8px 10px;width:100%;text-align:left;display:flex;align-items:center;gap:6px;min-height:40px}
 .pick .v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -574,6 +580,13 @@ function openModal(html, wide){
   const root=$('#modalRoot');
   const el=document.createElement('div'); el.className='modal';
   el.innerHTML='<div class="modal-box'+(wide?' wide':'')+'">'+html+'</div>';
+  // ปุ่ม ✕ มุมขวาบนทุกหน้าต่าง (ทำเหมือนปุ่มยกเลิก/ปิดของหน้าต่างนั้น)
+  const head=el.querySelector('.modal-head');
+  if(head){
+    const x=document.createElement('button'); x.className='modal-x'; x.type='button'; x.title='ปิด'; x.innerHTML=ICONS.close;
+    x.onclick=()=>{ const c=el.querySelector('.modal-foot [data-x]'); if(c) c.click(); else el.remove(); };
+    head.appendChild(x);
+  }
   root.appendChild(el);
   return {el, close(){ el.remove(); }};
 }
@@ -1068,13 +1081,37 @@ function printPickList(only){
     <tr class="tot"><td colspan="3">รวม ${pickRows(po).length} รายการ</td><td>${num(pickRows(po).reduce((a,r)=>a+r.qty,0))}</td><td colspan="2"></td></tr></table></div>`).join('');
   const html=`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบจัดสินค้า ${S.today}</title>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet"><style>${css}</style></head>
-    <body><div class="noprint" style="margin-bottom:10px"><button onclick="print()">🖨 พิมพ์ / บันทึกเป็น PDF</button></div>${head}${sum}${per}
-    <div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>
-    <script>window.onload=function(){setTimeout(function(){print()},600)}<`+`/script></body></html>`;
-  const w=window.open('', '_blank');
-  if(w){ w.document.open(); w.document.write(html); w.document.close(); return; }
-  const fr=document.createElement('iframe'); fr.style.cssText='position:fixed;width:0;height:0;border:0;right:0;bottom:0';
-  document.body.appendChild(fr); fr.srcdoc=html; fr.onload=()=>{ try{ fr.contentWindow.print(); }catch(e){ fail(new Error('เบราว์เซอร์บล็อกหน้าพิมพ์ — อนุญาต pop-up แล้วลองใหม่')); } setTimeout(()=>fr.remove(), 60000); };
+    <body>${head}${sum}${per}
+    <div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div></body></html>`;
+  showDocView(html, 'ใบจัดสินค้า • '+d.pos.length+' P.O.');
+}
+
+/** หน้าดูเอกสารในแอป (ใบจัดสินค้า) — มีปุ่มพิมพ์/PDF และปุ่มปิดที่กดถึงเสมอ ไม่เปิดหน้าต่างใหม่ */
+function showDocView(html, title){
+  const wrap=document.createElement('div'); wrap.className='pdf-full doc-view';
+  wrap.innerHTML=`<div class="bar"><span class="t">${h(title)}</span>
+      <button data-print title="พิมพ์ / บันทึกเป็น PDF">🖨 <span class="hide-sm">พิมพ์ / PDF</span></button>
+      <button data-win title="เปิดในหน้าต่างใหม่">↗</button><button data-x title="ปิด">✕</button></div>
+    <div class="doc-scroll"><div class="doc-page"><iframe title="${h(title)}"></iframe></div></div>
+    <button class="pdf-close-fab" data-x2>${ICONS.close}<span>ปิดเอกสาร</span></button>`;
+  document.body.appendChild(wrap);
+  try{ history.pushState(Object.assign({}, history.state||{}, {pdf:1}), ''); }catch(e){}
+  const fr=$('iframe',wrap);
+  // แสดงขนาดกระดาษ A4 แล้วย่อให้พอดีความกว้างจอ (เหมือนตัวอย่างก่อนพิมพ์)
+  const PAGE_W=820;
+  const fit=()=>{ try{
+    const d=fr.contentDocument, hgt=Math.max(d.documentElement.scrollHeight, d.body.scrollHeight)+30;
+    const avail=$('.doc-scroll',wrap).clientWidth-24, sc=Math.min(1, avail/PAGE_W);
+    fr.style.width=PAGE_W+'px'; fr.style.height=hgt+'px'; fr.style.transform='scale('+sc+')';
+    const pg=$('.doc-page',wrap); pg.style.width=(PAGE_W*sc)+'px'; pg.style.height=(hgt*sc)+'px';
+  }catch(e){} };
+  fr.onload=()=>{ fit(); setTimeout(fit, 400); };
+  window.addEventListener('resize', fit);
+  fr.srcdoc=html;
+  const close=()=>{ wrap.remove(); try{ if(history.state && history.state.pdf){ SKIP_POP=true; history.back(); } }catch(e){} };
+  $('[data-x]',wrap).onclick=close; $('[data-x2]',wrap).onclick=close;
+  $('[data-print]',wrap).onclick=()=>{ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ fail(new Error('พิมพ์จากหน้านี้ไม่ได้ — กด ↗ เพื่อเปิดในหน้าต่างใหม่แล้วพิมพ์')); } };
+  $('[data-win]',wrap).onclick=()=>{ const w=window.open('', '_blank'); if(!w){ toast('เบราว์เซอร์บล็อกหน้าต่างใหม่', true); return; } w.document.open(); w.document.write(html); w.document.close(); };
 }
 
 /* =========================================================
