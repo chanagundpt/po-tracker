@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#11161c">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -203,9 +203,11 @@ details[open] summary{margin-bottom:10px}
   background:var(--accent);color:var(--accent-ink);box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .pdf-full .bar .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
 .pdf-full .bar button{background:#3a404a;border:0;color:#fff;border-radius:8px;min-width:38px;height:36px;font-size:16px}
-.pdf-full .pages{flex:1;overflow:auto;display:grid;gap:12px;justify-items:center;padding:12px 12px calc(90px + env(safe-area-inset-bottom));align-content:start;-webkit-overflow-scrolling:touch}
+.pdf-full .pages{flex:1;overflow:auto;display:grid;gap:12px;justify-items:center;padding:12px 12px calc(90px + env(safe-area-inset-bottom));align-content:start;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+.pdf-full .pages canvas{max-width:none}
 .pdf-full canvas{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.4)}
-.doc-view .doc-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px 12px calc(90px + env(safe-area-inset-bottom))}
+.doc-view .doc-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px 12px calc(90px + env(safe-area-inset-bottom));touch-action:pan-x pan-y}
+.doc-view .doc-page{pointer-events:none}
 .doc-view .doc-page{margin:0 auto;overflow:hidden;background:#fff;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
 .doc-view iframe{display:block;border:0;background:#fff;transform-origin:0 0}
 .pdf-full .bar button{white-space:nowrap;padding:0 10px}
@@ -1099,14 +1101,16 @@ function showDocView(html, title){
   const fr=$('iframe',wrap);
   // แสดงขนาดกระดาษ A4 แล้วย่อให้พอดีความกว้างจอ (เหมือนตัวอย่างก่อนพิมพ์)
   const PAGE_W=820;
+  let mult=1;
   const fit=()=>{ try{
     const d=fr.contentDocument, hgt=Math.max(d.documentElement.scrollHeight, d.body.scrollHeight)+30;
-    const avail=$('.doc-scroll',wrap).clientWidth-24, sc=Math.min(1, avail/PAGE_W);
+    const avail=$('.doc-scroll',wrap).clientWidth-24, sc=Math.min(1, avail/PAGE_W)*mult;
     fr.style.width=PAGE_W+'px'; fr.style.height=hgt+'px'; fr.style.transform='scale('+sc+')';
     const pg=$('.doc-page',wrap); pg.style.width=(PAGE_W*sc)+'px'; pg.style.height=(hgt*sc)+'px';
   }catch(e){} };
   fr.onload=()=>{ fit(); setTimeout(fit, 400); };
   window.addEventListener('resize', fit);
+  enablePinch($('.doc-scroll',wrap), ()=>mult, z=>{ mult=z; fit(); }, 1, 4);
   fr.srcdoc=html;
   const close=()=>{ wrap.remove(); try{ if(history.state && history.state.pdf){ SKIP_POP=true; history.back(); } }catch(e){} };
   $('[data-x]',wrap).onclick=close; $('[data-x2]',wrap).onclick=close;
@@ -1166,6 +1170,22 @@ window.addEventListener('popstate', ()=>{
   if($('.modal')){ $$('.modal').forEach(m=>m.remove()); if(S.detail) try{ history.pushState({po:S.detail.po.id},''); }catch(e){} return; }
   if(S.detail) closeDetail(true);
 });
+// iPhone: ห้ามซูมทั้งหน้า (ปุ่มปิดจะหลุดจอ) — ซูมได้เฉพาะในหน้าดูเอกสาร ซึ่งจัดการเอง
+document.addEventListener('gesturestart', e=>e.preventDefault());
+document.addEventListener('gesturechange', e=>e.preventDefault());
+document.addEventListener('touchmove', e=>{ if(e.touches && e.touches.length>1 && !e.target.closest('.pdf-full')) e.preventDefault(); }, {passive:false});
+let LAST_TAP=0;
+document.addEventListener('touchend', e=>{ const t=Date.now(); if(t-LAST_TAP<300 && !e.target.closest('input,textarea,select,button,a')) e.preventDefault(); LAST_TAP=t; }, {passive:false});
+
+/** ซูมด้วยสองนิ้วเฉพาะในกล่องนี้ — setZoom(z, final) */
+function enablePinch(el, getZoom, setZoom, min, max){
+  let d0=0, z0=1;
+  const dist=t=>Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+  el.addEventListener('touchstart', e=>{ if(e.touches.length===2){ d0=dist(e.touches); z0=getZoom(); } }, {passive:true});
+  el.addEventListener('touchmove', e=>{ if(e.touches.length===2 && d0){ e.preventDefault(); setZoom(Math.min(max, Math.max(min, z0*dist(e.touches)/d0)), false); } }, {passive:false});
+  el.addEventListener('touchend', e=>{ if(d0 && e.touches.length<2){ d0=0; setZoom(getZoom(), true); } });
+}
+
 function closeDetail(fromPop){
   if(!fromPop){ try{ if(history.state && history.state.po){ SKIP_POP=true; history.back(); } }catch(e){} }
   const fab=$('#sheetCloseFab'); if(fab) fab.remove();
@@ -1850,7 +1870,7 @@ async function renderPages(doc, el, width){
     const base=page.getViewport({scale:1});
     const vp=page.getViewport({scale:(width/base.width)*dpr});
     const c=document.createElement('canvas');
-    c.width=Math.floor(vp.width); c.height=Math.floor(vp.height); c.style.width=Math.floor(vp.width/dpr)+'px';
+    c.width=Math.floor(vp.width); c.height=Math.floor(vp.height); c.style.width=Math.floor(vp.width/dpr)+'px'; c._w0=vp.width/dpr;
     el.appendChild(c);
     await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
   }
@@ -1881,8 +1901,12 @@ async function openPdfFull(po){
   document.body.appendChild(wrap);
   try{ history.pushState(Object.assign({}, history.state||{}, {pdf:1}), ''); }catch(e){}
   const pages=$('.pages',wrap);
-  const draw=async()=>{ try{ const doc=await getPdfDoc(po); await renderPages(doc, pages, Math.min(pages.clientWidth-24, 1100)*zoom); }catch(e){ pages.innerHTML='<div style="color:#fff">'+h(e.message)+'</div>'; } };
-  $$('[data-z]',wrap).forEach(b=>b.onclick=()=>{ zoom=Math.min(3,Math.max(0.5, zoom+Number(b.dataset.z)*0.25)); draw(); });
+  let drawnZoom=1, drawing=null;
+  const draw=async()=>{ try{ const doc=await getPdfDoc(po); const z=zoom; await renderPages(doc, pages, Math.min(pages.clientWidth-24, 1100)*z); drawnZoom=z; }catch(e){ pages.innerHTML='<div style="color:#fff">'+h(e.message)+'</div>'; } };
+  // ระหว่างซูม: ยืดภาพเดิมทันที / ปล่อยนิ้ว: วาดใหม่ให้คมชัด
+  const live=()=>$$('canvas',pages).forEach(c=>{ if(c._w0) c.style.width=(c._w0*zoom/drawnZoom)+'px'; });
+  enablePinch(pages, ()=>zoom, (z, final)=>{ zoom=z; live(); if(final){ clearTimeout(drawing); drawing=setTimeout(draw, 120); } }, 0.6, 4);
+  $$('[data-z]',wrap).forEach(b=>b.onclick=()=>{ zoom=Math.min(4,Math.max(0.6, zoom+Number(b.dataset.z)*0.25)); live(); clearTimeout(drawing); drawing=setTimeout(draw, 150); });
   const close=()=>{ wrap.remove(); try{ if(history.state && history.state.pdf){ SKIP_POP=true; history.back(); } }catch(e){} };
   $('[data-x]',wrap).onclick=close; $('[data-x2]',wrap).onclick=close;
   const op=$('[data-open]',wrap); if(op) op.onclick=()=>window.open(po.file_url,'_blank');
