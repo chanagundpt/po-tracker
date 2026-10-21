@@ -1058,6 +1058,80 @@ function pickSelection(){
   if(!pos.length){ toast('กรุณาติ๊กเลือก P.O. ที่จะจัดก่อน', true); return null; }
   return {pos, agg:pickAggregate(pos)};
 }
+/* ---------- Excel จำนวนพร้อมส่งของ P.O. เดียว: ดาวน์โหลด → แก้ → นำเข้ากลับ ---------- */
+async function downloadWorkbook(wb, name){
+  const win = MODE==='gas' ? window.open('', '_blank') : null;   // ต้องเปิดก่อนรอ ไม่งั้นเบราว์เซอร์บล็อก
+  try{
+    await loadScript(XLSX_SRC);
+    if(MODE!=='gas'){ XLSX.writeFile(wb, name); return; }
+    const r=await call('saveExport',{name, b64:XLSX.write(wb,{bookType:'xlsx',type:'base64'}), mime:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    if(win){ win.location.href=r.url; toast('กำลังดาวน์โหลด Excel'); }
+    else { const md=openModal(`<div class="modal-head">ไฟล์ Excel พร้อมแล้ว</div><div class="modal-body"><a class="btn primary" href="${h(r.url)}" target="_blank" rel="noopener">⬇ ดาวน์โหลด ${h(name)}</a></div><div class="modal-foot"><button class="btn" data-x>ปิด</button></div>`); $('[data-x]',md.el).onclick=()=>md.close(); }
+  }catch(e){ if(win) win.close(); throw e; }
+}
+const XLS_HEAD=['ลำดับ','บาร์โค้ด','SKU','แบรนด์','ชื่อสินค้า','จำนวนสั่ง','จำนวนพร้อมส่ง','หมายเหตุ'];
+async function exportItemsExcel(po, items){
+  await loadScript(XLSX_SRC);
+  const rows=[
+    ['P.O. '+po.po_no+' • '+(po.customer||'')+' • กำหนดส่ง '+(po.due_date||'-'),'','','','','','','','id:'+po.id],
+    ['วิธีใช้: แก้เฉพาะคอลัมน์ "จำนวนพร้อมส่ง" และ "หมายเหตุ" แล้วนำเข้าไฟล์นี้กลับที่หน้า P.O. (ปุ่ม ⬆ นำเข้า Excel) • ช่องว่าง = ไม่เปลี่ยน'],
+    XLS_HEAD,
+  ];
+  items.forEach(it=>{
+    const m=matchItem(it), p=MATCH_OK[m.status] ? m.product : null;
+    rows.push([Number(it.line), String(it.barcode||''), p ? (p.sku||'') : (it.jst_sku||''), it.brand||'', (p && p.name) || it.name,
+      Number(it.qty)||0, it.qty_ready===''||it.qty_ready==null ? '' : Number(it.qty_ready), it.item_note||'']);
+  });
+  rows.push(['','','','','รวม', items.reduce((a,i)=>a+(Number(i.qty)||0),0), '', '']);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:7},{wch:16},{wch:16},{wch:12},{wch:50},{wch:11},{wch:15},{wch:28},{wch:2}];
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:7}},{s:{r:1,c:0},e:{r:1,c:7}}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'จำนวนพร้อมส่ง');
+  const safe=String(po.po_no||po.id).replace(/[\\/:*?"<>|]/g,'-');
+  await downloadWorkbook(wb, 'จำนวนพร้อมส่ง_'+(po.customer||'')+'_'+safe+'.xlsx');
+}
+async function importItemsExcel(po, file){
+  await loadScript(XLSX_SRC);
+  const wb=XLSX.read(await file.arrayBuffer(), {type:'array'});
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
+  const idCell=rows.slice(0,3).flat().map(String).find(v=>/^id:/.test(v.trim()));
+  if(idCell && idCell.trim().slice(3)!==po.id) throw new Error('ไฟล์นี้เป็นของ P.O. ใบอื่น — กรุณาเปิด P.O. ให้ตรงกับไฟล์ก่อนนำเข้า');
+  const hi=rows.findIndex(r=>r.some(c=>String(c).trim()==='จำนวนพร้อมส่ง'));
+  if(hi<0) throw new Error('ไม่พบคอลัมน์ "จำนวนพร้อมส่ง" — ใช้ไฟล์ที่ดาวน์โหลดจากปุ่ม ⬇ Excel');
+  const head=rows[hi].map(c=>String(c).trim()), col=n=>head.indexOf(n);
+  const iLine=col('ลำดับ'), iBc=col('บาร์โค้ด'), iReady=col('จำนวนพร้อมส่ง'), iNote=col('หมายเหตุ');
+  const items=S.detail.items, updates=[], changes=[], warns=[];
+  rows.slice(hi+1).forEach(r=>{
+    if(!r.some(c=>String(c).trim())) return;
+    const bc=iBc>=0 ? String(r[iBc]).trim() : '';
+    const ln=iLine>=0 ? String(r[iLine]).trim() : '';
+    if(!bc && !ln) return;                                   // แถวรวม
+    let it=items.find(x=>String(x.line)===ln);
+    if(!it || (bc && it.barcode && it.barcode!==bc)) it=items.find(x=>x.barcode && x.barcode===bc) || null;
+    if(!it){ warns.push('ไม่พบรายการในใบ P.O.: '+(bc||'ลำดับ '+ln)); return; }
+    const u={line:it.line}, msg=[];
+    const rv=String(r[iReady]).replace(/,/g,'').trim();
+    if(rv!==''){
+      const n=Number(rv);
+      if(isNaN(n) || n<0) warns.push('#'+it.line+' จำนวนไม่ถูกต้อง: '+rv);
+      else if(String(n)!==String(it.qty_ready)){
+        u.qty_ready=n; msg.push('พร้อมส่ง '+(it.qty_ready===''?'(ยังไม่เช็ค)':num(it.qty_ready))+' → <b>'+num(n)+'</b>/'+num(it.qty));
+        if(n>Number(it.qty)) warns.push('#'+it.line+' พร้อมส่ง '+num(n)+' มากกว่าจำนวนสั่ง '+num(it.qty));
+      }
+    }
+    if(iNote>=0){ const nv=String(r[iNote]).trim(); if(nv!==String(it.item_note||'')){ u.item_note=nv; msg.push('หมายเหตุ: '+(nv?h(nv):'(ลบ)')); } }
+    if(msg.length){ updates.push(u); changes.push('<div class="ref">#'+h(it.line)+' '+h((it.name||'').slice(0,40))+'</div><div style="margin:0 0 6px 10px">'+msg.join(' • ')+'</div>'); }
+  });
+  if(!updates.length){ toast(warns.length ? warns[0] : 'ไม่มีจำนวนหรือหมายเหตุที่เปลี่ยนจากเดิม', !!warns.length); return; }
+  const md=openModal(`<div class="modal-head">นำเข้าจาก Excel</div><div class="modal-body">
+    <div class="alert info">จะอัปเดต <b>${updates.length}</b> รายการจากไฟล์ ${h(file.name)}</div>
+    ${warns.length?`<div class="alert warn">${warns.map(h).join('<br>')}</div>`:''}
+    <div style="font-size:13.5px">${changes.join('')}</div>
+  </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>✓ อัปเดต ${updates.length} รายการ</button></div>`, true);
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=()=>{ md.close(); saveItems(updates, 'อัปเดตจาก Excel แล้ว '+updates.length+' รายการ'); };
+}
+
 async function exportPickExcel(only){
   const d=only ? {pos:only, agg:pickAggregate(only)} : pickSelection(); if(!d) return;
   const win = MODE==='gas' ? window.open('', '_blank') : null;
@@ -1331,6 +1405,8 @@ function renderDetail(){
       <div class="panel">
         <h3>รายการสินค้า <span class="sp"></span>
           ${items.length && !cancelled && !frozen?`<button class="btn sm" id="allReady">✓ พร้อมครบทุกรายการ</button>`:''}
+          ${items.length?`<button class="btn sm" id="xlsOut" title="ดาวน์โหลด Excel เพื่อแก้จำนวนพร้อมส่ง">⬇ Excel</button>`:''}
+          ${items.length && !frozen?`<label class="btn sm" title="นำเข้าไฟล์ Excel ที่แก้จำนวนแล้ว">⬆ นำเข้า Excel<input type="file" id="xlsIn" accept=".xlsx,.xls,.csv" hidden></label>`:''}
           <button class="btn sm" id="editItems">✏️ แก้ไขรายการ</button></h3>
         ${!items.length && po.file_url ? `<div class="alert info extract-box"><span style="flex:1;min-width:200px">ยังไม่มีรายการสินค้า — ให้ระบบอ่านบาร์โค้ดจากใบ P.O. แล้วจับคู่ชื่อกับ JST ให้ (ตรวจจำนวนก่อนบันทึก)</span>
           <button class="btn sm primary" id="extractBtn">📥 ดึงรายการจากใบ P.O.</button></div>`:''}
@@ -1377,6 +1453,8 @@ function renderDetail(){
   $$('[data-f]').forEach(inp=>inp.onchange=()=>saveField(inp.dataset.f, inp.value));
   $('#noteSend').onclick=addNote;
   $('#editItems').onclick=()=>openItemsEditor(po, items);
+  const xo=$('#xlsOut'); if(xo) xo.onclick=()=>exportItemsExcel(po, items).catch(fail);
+  const xi=$('#xlsIn'); if(xi) xi.onchange=()=>{ const f=xi.files[0]; xi.value=''; if(f) importItemsExcel(po, f).catch(fail); };
   const eb=$('#extractBtn'); if(eb) eb.onclick=async()=>{ eb.disabled=true; eb.innerHTML='<span class="spin"></span> กำลังอ่าน…';
     try{ const rows=await extractItemsFromPdf(po); openItemsEditor(po, [], rows); }catch(e){ fail(e); } eb.disabled=false; eb.textContent='📥 ดึงรายการจากใบ P.O.'; };
   const ov2=$('.overlay');
