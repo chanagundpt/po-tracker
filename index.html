@@ -395,6 +395,7 @@ body.locked .top, body.locked main, body.locked .fab, body.locked #demoBar{displ
 .itotal{padding:10px 10px 10px 14px;border:1px dashed var(--line);border-radius:10px;font-size:14px;background:var(--soft)}
 .itotal .lbl{grid-column:1/5;text-align:right;color:var(--muted);font-weight:600}
 @media (max-width:640px){.itotal{grid-template-columns:1fr auto}.itotal .lbl{grid-column:auto;text-align:left}.itotal span:last-child{display:none}}
+.ed-allbrand{border:1px dashed var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:7px;padding:1px 6px;font-size:12px;font-weight:600;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ed-total{display:flex;justify-content:flex-end;gap:16px;padding:8px 12px;border-radius:10px;background:var(--soft);font-size:14px}
 .ed-total b{font-size:16px}
 /* ---- editor ---- */
@@ -1540,6 +1541,16 @@ function bindEd(root){
   new MutationObserver(updTotal).observe(table,{childList:true});
   updTotal();
   root.addEventListener('click',e=>{ if(e.target.matches('[data-del]')) e.target.closest('.ed-row').remove(); });
+  // เลือกแบรนด์ครั้งเดียว ใส่ให้ทุกแถว
+  root.addEventListener('click',async e=>{
+    if(!e.target.closest('[data-allbrand]')) return;
+    const rows=$$('.ed-row:not(.ed-head)',root);
+    const cur=rows.map(r=>$('[data-k=brand]',r).value.trim()).find(Boolean)||'';
+    const v=await pickList({type:'brand', title:'เลือกแบรนด์ให้ทุกแถว ('+rows.length+' รายการ)', selected:cur});
+    if(v==null) return;
+    rows.forEach(r=>{ $('[data-k=brand]',r).value=v; });
+    toast(v ? 'ใส่แบรนด์ “'+v+'” ให้ทั้ง '+rows.length+' รายการแล้ว' : 'ล้างแบรนด์ทุกแถวแล้ว');
+  });
   root.addEventListener('change',e=>{
     if(!e.target.matches('[data-k=barcode]') || !S.prod) return;
     const p=S.prod.byCode[e.target.value.trim().toUpperCase()];
@@ -1577,7 +1588,7 @@ function bindEd(root){
     toast(added?'เพิ่ม '+added+' รายการ — กรุณาตรวจจำนวน':'ไม่พบรายการ (ต้องมีบาร์โค้ด 13 หลัก หรือคั่นด้วย Tab จาก Excel)', !added);
   };
 }
-const ED_HEAD = `<div class="ed-row ed-head"><span>บาร์โค้ด</span><span>SKU</span><span>แบรนด์</span><span>ชื่อสินค้า</span><span>จำนวน</span><span>หมายเหตุ</span><span></span></div>`;
+const ED_HEAD = `<div class="ed-row ed-head"><span>บาร์โค้ด</span><span>SKU</span><button type="button" class="ed-allbrand" data-allbrand title="เลือกแบรนด์ให้ทุกแถว">แบรนด์ ▾ ทุกแถว</button><span>ชื่อสินค้า</span><span>จำนวน</span><span>หมายเหตุ</span><span></span></div>`;
 
 function openItemsEditor(po, items, extra){
   const poId=po.id;
@@ -1586,7 +1597,7 @@ function openItemsEditor(po, items, extra){
     ${extra && extra.length ? `<div class="alert info">ดึงจากใบ P.O. ได้ ${extra.length} รายการ — ชื่อสินค้าที่บาร์โค้ดตรงกับ JST ใส่ให้แล้ว <b>กรุณาตรวจจำนวนเทียบกับใบ P.O.</b> ก่อนบันทึก</div>`
       : extra ? '<div class="alert warn">ไม่พบบาร์โค้ด 13 หลักในไฟล์นี้ (บางไฟล์ตัดบาร์โค้ดขึ้นบรรทัดใหม่) — กรุณากรอกเองหรือวางจาก Excel</div>' : ''}
     <div class="ed-table">${ED_HEAD}${(rows.length?rows:[{}]).map(edRow).join('')}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-add>＋ เพิ่มแถว</button><button class="btn sm" data-paste>📋 วางจาก Excel</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-add>＋ เพิ่มแถว</button><button class="btn sm" data-allbrand>🏷 แบรนด์ทุกแถว</button><button class="btn sm" data-paste>📋 วางจาก Excel</button>
       ${po.file_url?'<button class="btn sm" data-extract>📥 ดึงจากใบ P.O.</button><button class="btn sm" data-viewpdf>👁 ดูใบ P.O.</button>':''}</div>
     <div class="item-meta">พิมพ์บาร์โค้ด / SKU / ชื่อ แล้วเลือกสินค้าจาก JST ได้ • ผลเช็คสินค้าเดิมเก็บไว้ถ้าบาร์โค้ดและชื่อไม่เปลี่ยน</div>
   </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>บันทึก</button></div>`, true);
@@ -1638,7 +1649,7 @@ function openNewPo(){
       </div>
       <div style="margin-top:10px;font-weight:600">รายการสินค้า</div>
       <div class="ed-table">${ED_HEAD}${edRow()}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-add>＋ เพิ่มแถว</button><button class="btn sm" data-paste>📋 วางจาก Excel</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px"><button class="btn sm" data-add>＋ เพิ่มแถว</button><button class="btn sm" data-allbrand>🏷 แบรนด์ทุกแถว</button><button class="btn sm" data-paste>📋 วางจาก Excel</button></div>
       <datalist id="custList3">${[...new Set(S.pos.map(p=>p.customer).filter(Boolean))].map(c=>`<option>${h(c)}</option>`).join('')}</datalist>
     </div>
   </div><div class="modal-foot"><button class="btn" data-x>ปิด</button><button class="btn primary hidden" data-ok>สร้าง P.O.</button></div>`, true);
