@@ -64,10 +64,12 @@ main{max-width:1100px;margin:0 auto;padding:14px 16px 80px}
 .kpi.red b{color:var(--red)} .kpi.orange b{color:var(--orange)} .kpi.yellow b{color:var(--yellow)}
 @media (max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
 
-.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;scrollbar-width:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;font-size:13.5px;white-space:nowrap}
 .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .chip .n{opacity:.7;margin-left:4px}
+.chip.red{border-color:var(--red);color:var(--red);background:var(--red-soft)}
+.chip.red.on{background:var(--red);border-color:var(--red);color:#fff}
 
 .filters{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
 .filters input,.filters select{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 10px;min-width:0}
@@ -873,7 +875,8 @@ function filteredPos(){
   let list = S.pos.filter(po=>{
     if(f.status==='OPEN' && isClosed(po)) return false;
     if(f.status==='ALL' && po.status==='DELETED') return false;
-    if(f.status!=='OPEN' && f.status!=='ALL' && po.status!==f.status) return false;
+    if(f.status==='NOJST' && !noJstCut(po)) return false;
+    if(!['OPEN','ALL','NOJST'].includes(f.status) && po.status!==f.status) return false;
     if(f.customer && po.customer!==f.customer) return false;
     if(f.due){
       if(isClosed(po)) return false;
@@ -918,10 +921,10 @@ function renderList(){
     </div>
     ${cnt('DUPLICATE') && f.status!=='DUPLICATE' ? `<button class="dup-banner" id="dupBanner">🟣 มี P.O. เลขซ้ำรอตรวจ ${cnt('DUPLICATE')} ใบ — แตะเพื่อตรวจว่าเป็นการอัปเดตหรือไม่</button>`:''}
     <div class="chips">
-      ${[['OPEN','ยังไม่ส่ง',k.open]].concat(STATUSES.map(s=>[s.key,(ST_IDX[s.key]+1)+'. '+s.label,cnt(s.key)]))
+      ${[['OPEN','ยังไม่ส่ง',k.open],['NOJST','⚠ ยังไม่ได้ตัด Stock JST',S.pos.filter(noJstCut).length,'red']].concat(STATUSES.map(s=>[s.key,(ST_IDX[s.key]+1)+'. '+s.label,cnt(s.key)]))
         .concat([['DUPLICATE','🟣 เลขซ้ำ',cnt('DUPLICATE')],['SUPERSEDED','ใบเก่า',cnt('SUPERSEDED')],['CANCELLED','ยกเลิก',cnt('CANCELLED')],
           ['DELETED','🗑 ถูกลบ',cnt('DELETED')],['ALL','ทั้งหมด',S.pos.filter(p=>p.status!=='DELETED').length]])
-        .map(([key,lbl,n])=>`<button class="chip ${f.status===key?'on':''}" data-st="${key}">${h(lbl)}<span class="n">${n}</span></button>`).join('')}
+        .map(([key,lbl,n,cls])=>`<button class="chip ${cls||''} ${f.status===key?'on':''}" data-st="${key}">${h(lbl)}<span class="n">${n}</span></button>`).join('')}
     </div>
     <div class="filters">
       <input id="q" type="search" placeholder="🔎 ค้นหา เลข P.O. / ลูกค้า / บาร์โค้ด / ชื่อสินค้า" value="${h(f.q)}">
