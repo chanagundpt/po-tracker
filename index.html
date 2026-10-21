@@ -262,6 +262,15 @@ details[open] summary{margin-bottom:10px}
   border-radius:999px;padding:5px 14px;font-size:13px;box-shadow:var(--shadow);transition:transform .2s}
 .saving.show{transform:translate(-50%,0)}
 .saving.done{color:var(--green)}
+/* ---- print: เฉพาะเอกสาร เต็มแผ่น A4 ---- */
+#printArea{display:none}
+@media print{
+  @page{size:A4;margin:12mm}
+  html,body{background:#fff!important;color:#111!important;overflow:visible!important;height:auto!important}
+  body.print-doc > *:not(#printArea){display:none!important}
+  body.print-doc #printArea{display:block!important}
+  #printArea *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
 /* ---- v1.4.1: mobile ---- */
 html,body{overflow-x:hidden;max-width:100%}
 .ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
@@ -1085,12 +1094,27 @@ function printPickList(only){
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet"><style>${css}</style></head>
     <body>${head}${sum}${per}
     <div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div></body></html>`;
-  showDocView(html, 'ใบจัดสินค้า • '+d.pos.length+' P.O.');
+  // ชุดสำหรับพิมพ์จริง: ใส่เอกสารลงหน้าหลัก แล้วซ่อนส่วนอื่นตอนพิมพ์ (ได้ A4 เต็มแผ่น)
+  const pcss=`#printArea{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;background:#fff;line-height:1.4}
+    #printArea h1{font-size:18px;margin:0;color:#111}#printArea h2{font-size:14px;margin:18px 0 6px;color:#111}#printArea .sub{color:#555;margin:2px 0 10px}
+    #printArea table{width:100%;border-collapse:collapse;margin-bottom:6px}
+    #printArea th,#printArea td{border:1px solid #999;padding:4px 6px;text-align:center;vertical-align:middle;color:#111;background:#fff}
+    #printArea th{background:#eee}#printArea .nm{text-align:left}#printArea .ck{width:34px}#printArea .tot td{background:#f5f5f5;font-weight:600}
+    #printArea .po{break-inside:avoid;page-break-inside:avoid;margin-bottom:12px}#printArea tr{break-inside:avoid;page-break-inside:avoid}
+    #printArea .sign{display:flex;gap:40px;margin-top:24px}#printArea .sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}`;
+  showDocView(html, 'ใบจัดสินค้า • '+d.pos.length+' P.O.', {css:pcss, body:`${head}${sum}${per}<div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>`});
 }
 
 /** หน้าดูเอกสารในแอป (ใบจัดสินค้า) — มีปุ่มพิมพ์/PDF และปุ่มปิดที่กดถึงเสมอ ไม่เปิดหน้าต่างใหม่ */
-function showDocView(html, title){
+function showDocView(html, title, printDoc){
   const wrap=document.createElement('div'); wrap.className='pdf-full doc-view';
+  // พื้นที่สำหรับพิมพ์ (ซ่อนบนจอ) — ตอนพิมพ์จะแสดงแค่ส่วนนี้ เต็มกระดาษ A4
+  let pa=$('#printArea'); if(pa) pa.remove();
+  if(printDoc){
+    pa=document.createElement('div'); pa.id='printArea';
+    pa.innerHTML=`<style>${printDoc.css}</style>${printDoc.body}`;
+    document.body.appendChild(pa); document.body.classList.add('print-doc');
+  }
   wrap.innerHTML=`<div class="bar"><span class="t">${h(title)}</span>
       <button data-print title="พิมพ์ / บันทึกเป็น PDF">🖨 <span class="hide-sm">พิมพ์ / PDF</span></button>
       <button data-win title="เปิดในหน้าต่างใหม่">↗</button><button data-x title="ปิด">✕</button></div>
@@ -1112,9 +1136,13 @@ function showDocView(html, title){
   window.addEventListener('resize', fit);
   enablePinch($('.doc-scroll',wrap), ()=>mult, z=>{ mult=z; fit(); }, 1, 4);
   fr.srcdoc=html;
-  const close=()=>{ wrap.remove(); try{ if(history.state && history.state.pdf){ SKIP_POP=true; history.back(); } }catch(e){} };
+  const close=()=>{ wrap.remove(); const p=$('#printArea'); if(p) p.remove(); document.body.classList.remove('print-doc');
+    try{ if(history.state && history.state.pdf){ SKIP_POP=true; history.back(); } }catch(e){} };
   $('[data-x]',wrap).onclick=close; $('[data-x2]',wrap).onclick=close;
-  $('[data-print]',wrap).onclick=()=>{ try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ fail(new Error('พิมพ์จากหน้านี้ไม่ได้ — กด ↗ เพื่อเปิดในหน้าต่างใหม่แล้วพิมพ์')); } };
+  $('[data-print]',wrap).onclick=()=>{
+    if($('#printArea')){ try{ window.print(); return; }catch(e){} }
+    try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ fail(new Error('พิมพ์จากหน้านี้ไม่ได้ — กด ↗ เพื่อเปิดในหน้าต่างใหม่แล้วพิมพ์')); }
+  };
   $('[data-win]',wrap).onclick=()=>{ const w=window.open('', '_blank'); if(!w){ toast('เบราว์เซอร์บล็อกหน้าต่างใหม่', true); return; } w.document.open(); w.document.write(html); w.document.close(); };
 }
 
@@ -1166,7 +1194,7 @@ function scheduleSync(){
 let SKIP_POP=false;
 window.addEventListener('popstate', ()=>{
   if(SKIP_POP){ SKIP_POP=false; return; }
-  const pf=$('.pdf-full'); if(pf){ pf.remove(); return; }          // ย้อนกลับ = ปิดใบ P.O. เต็มจอก่อน
+  const pf=$('.pdf-full'); if(pf){ pf.remove(); const pa=$('#printArea'); if(pa) pa.remove(); document.body.classList.remove('print-doc'); return; }          // ย้อนกลับ = ปิดใบ P.O. เต็มจอก่อน
   if($('.modal')){ $$('.modal').forEach(m=>m.remove()); if(S.detail) try{ history.pushState({po:S.detail.po.id},''); }catch(e){} return; }
   if(S.detail) closeDetail(true);
 });
