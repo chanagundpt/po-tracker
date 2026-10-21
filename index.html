@@ -92,6 +92,7 @@ main{max-width:1100px;margin:0 auto;padding:14px 16px 80px}
 .tag{font-size:12px;border-radius:6px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);font-weight:500}
 .tag.warn{background:var(--orange-soft);color:var(--orange)}
 .tag.red{background:var(--red-soft);color:var(--red);font-weight:600}
+.tags .tag.end{margin-left:auto}
 .mini-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
 .mini-steps i{height:6px;border-radius:3px;background:var(--soft)}
 .mini-steps i.on{background:var(--accent)}
@@ -962,10 +963,10 @@ function cardHtml(po){
       ${po.replaces && po.status!=='SUPERSEDED' && po.status!=='DELETED'?'<span class="pill pill-new">🔗 อัปเดตจากใบเดิม</span>':''}
       ${po.status==='DELETED'?`<span class="pill pill-del">ลบโดย ${h(po.deleted_by||'-')} ${h(thDateTime(po.deleted_at))}</span>`:''}
       ${String(po.brands||'').split(',').filter(x=>x.trim()).map(b=>`<span class="tag">${h(b.trim())}</span>`).join('')}
-      ${noJstCut(po)?'<span class="tag red">⚠ ยังไม่ได้ตัด Stock JST</span>':''}
       ${po.warnings?'<span class="tag warn">⚠ ตรวจข้อมูล</span>':''}
       ${s.out+s.partial?`<span class="tag warn">ขาด ${s.out+s.partial} รายการ</span>`:''}
       ${po.appointment?`<span class="tag">🗓 นัดส่ง ${h(thDateTime(po.appointment.replace('T',' ')))}</span>`:''}
+      ${noJstCut(po)?'<span class="tag red end">⚠ ยังไม่ได้ตัด Stock JST</span>':''}
     </div>
     <div class="mini-steps">${STATUSES.map((x,i)=>`<i class="${i<=idx?'on':''}"></i>`).join('')}</div>
     <div class="card-foot">
@@ -1384,7 +1385,7 @@ function renderDetail(){
         <div class="pono">P.O. ${h(po.po_no)} ${po.seller?'• '+h(po.seller):''}</div>
         <div class="tags" style="margin-top:6px"><span class="badge ${d.cls}">${h(d.text)}</span>
           ${String(po.brands||'').split(',').filter(x=>x.trim()).map(b=>`<span class="tag">${h(b.trim())}</span>`).join('')}
-          ${noJstCut(po)?'<span class="tag red">⚠ ยังไม่ได้ตัด Stock JST</span>':''}</div>
+          ${noJstCut(po)?'<span class="tag red end">⚠ ยังไม่ได้ตัด Stock JST</span>':''}</div>
       </div>
       ${po.file_url?`<a class="iconbtn" href="${h(po.file_url)}" target="_blank" rel="noopener" title="เปิดไฟล์ P.O.">${ICONS.pdf}<span class="hide-sm">PDF</span></a>`:''}
       ${po.email_link?`<a class="iconbtn" href="${h(po.email_link)}" target="_blank" rel="noopener" title="เปิดเมลต้นทาง">${ICONS.mail}</a>`:''}
