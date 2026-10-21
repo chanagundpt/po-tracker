@@ -95,6 +95,13 @@ main{max-width:1100px;margin:0 auto;padding:14px 16px 80px}
 .tag.warn{background:var(--orange-soft);color:var(--orange)}
 .tag.red{background:var(--red-soft);color:var(--red);font-weight:600}
 .tags .tag.end{margin-left:auto}
+.tags .end-wrap{margin-left:auto;display:contents}
+.jst-multi .jst-sum{font-weight:400;margin-left:6px}
+.jst-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.jst-row{display:grid;gap:4px;border:1px solid var(--red);background:var(--red-soft);border-radius:10px;padding:8px}
+.jst-row .jb{font-size:12.5px;font-weight:600;color:var(--red)}
+.jst-row.ok{border-color:var(--line);background:transparent}
+.jst-row.ok .jb{color:var(--accent)}
 .mini-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
 .mini-steps i{height:6px;border-radius:3px;background:var(--soft)}
 .mini-steps i.on{background:var(--accent)}
@@ -480,9 +487,58 @@ body.view-summary .fab{display:none}
 const API_URL = "https://script.google.com/macros/s/AKfycbyaI-ZEpI-hFCE-T4p2-XNnBZwzTy4gPkwIHI2E_o27CT02c0TfU-7vWHKz9loxTxR0/exec";
 
 /** ภาษาไทยไม่มีเว้นวรรค เบราว์เซอร์บางตัว (iPhone) จึงไม่ตัดบรรทัด → ใส่ <wbr> ระหว่างคำ */
-/** ยังไม่ได้ใส่เลขออเดอร์ JST = ยังไม่ได้ตัดสต๊อกใน JST (ไม่นับใบที่ยกเลิก/ลบ/ใบเก่า/รอตัดสินใจเลขซ้ำ) */
+/* ---------- เลขออเดอร์ JST แยกตามแบรนด์ ----------
+   JST ตัดสต๊อกแยกออเดอร์ตามแบรนด์ → P.O. ที่มีหลายแบรนด์ต้องมีเลขออเดอร์ครบทุกแบรนด์
+   เก็บในช่อง jst_no ช่องเดิม: แบรนด์เดียว = "SO-1" / หลายแบรนด์ = "&honey: SO-1 | Smousse: SO-2" */
+function poBrands(po){
+  const list=String(po.brands||'').split(',').concat(itemsOf(po.id).map(i=>i.brand||''));
+  const out=[], seen={};
+  list.forEach(b=>{ b=String(b).trim(); const k=b.toLowerCase(); if(b && !seen[k]){ seen[k]=1; out.push(b); } });
+  return out;
+}
+function parseJst(s){
+  const map={}, plain=[];
+  String(s||'').split('|').map(x=>x.trim()).filter(Boolean).forEach(seg=>{
+    const i=seg.indexOf(':');
+    if(i>0){ const b=seg.slice(0,i).trim(), v=seg.slice(i+1).trim(); if(v) map[b.toLowerCase()]={brand:b, no:v}; }
+    else plain.push(seg);
+  });
+  return {map, plain:plain.join(' ')};
+}
+function jstInfo(po){
+  const brands=poBrands(po), p=parseJst(po.jst_no);
+  if(brands.length<2){
+    const v=p.plain || Object.values(p.map).map(x=>x.no).join(', ');
+    return {multi:false, brands, rows:[{brand:brands[0]||'', no:v}], done:v?1:0, total:1, missing:v?[]:[brands[0]||'']};
+  }
+  // ค่าเดิมที่ใส่ไว้ก่อนแยกแบรนด์ (ไม่มีชื่อแบรนด์) → ถือเป็นของแบรนด์แรกที่ยังว่าง
+  let legacy=p.plain;
+  const rows=brands.map(b=>{ let no=(p.map[b.toLowerCase()]||{}).no||''; if(!no && legacy){ no=legacy; legacy=''; } return {brand:b, no}; });
+  const missing=rows.filter(r=>!r.no).map(r=>r.brand);
+  return {multi:true, brands, rows, done:rows.length-missing.length, total:rows.length, missing};
+}
+function encodeJst(rows){
+  const clean=v=>String(v||'').replace(/[|]/g,' ').trim();
+  if(rows.length<2) return clean(rows[0] && rows[0].no);
+  return rows.filter(r=>clean(r.no)).map(r=>r.brand.replace(/[:|]/g,' ').trim()+': '+clean(r.no)).join(' | ');
+}
+/** ยังตัดสต๊อก JST ไม่ครบ (ไม่นับใบที่ยกเลิก/ลบ/ใบเก่า/รอตัดสินใจเลขซ้ำ) */
 function noJstCut(po){
-  return !String(po.jst_no||'').trim() && !['CANCELLED','DELETED','SUPERSEDED','DUPLICATE'].includes(po.status);
+  if(['CANCELLED','DELETED','SUPERSEDED','DUPLICATE'].includes(po.status)) return false;
+  return jstInfo(po).missing.length>0;
+}
+function jstTagHtml(po){
+  if(!noJstCut(po)) return '';
+  const j=jstInfo(po);
+  const txt = j.multi ? `⚠ ยังไม่ได้ตัด Stock JST: ${j.missing.join(', ')} (${j.done}/${j.total})` : '⚠ ยังไม่ได้ตัด Stock JST';
+  return `<span class="tag red end" title="${h(j.multi?'ตัดแล้ว '+j.done+' จาก '+j.total+' แบรนด์':'ยังไม่ได้ใส่เลขออเดอร์ JST')}">${h(txt)}</span>`;
+}
+function jstFieldHtml(po){
+  const j=jstInfo(po);
+  if(!j.multi) return `<div class="f"><label>เลขออเดอร์ใน JST</label><input type="text" data-jst="0" value="${h(j.rows[0].no)}" placeholder="เช่น SO-xxxx"></div>`;
+  return `<div class="f full jst-multi"><label>เลขออเดอร์ใน JST <span class="jst-sum">แยกตามแบรนด์ • ตัดแล้ว <b>${j.done}/${j.total}</b></span></label>
+    <div class="jst-rows">${j.rows.map((r,i)=>`<label class="jst-row ${r.no?'ok':''}"><span class="jb">${r.no?'✓':'⚠'} ${h(r.brand)}</span>
+      <input type="text" data-jst="${i}" value="${h(r.no)}" placeholder="เลขออเดอร์ JST ของ ${h(r.brand)}"></label>`).join('')}</div></div>`;
 }
 function thWrap(s){
   s=String(s==null?'':s);
@@ -969,7 +1025,7 @@ function cardHtml(po){
       ${po.warnings?'<span class="tag warn">⚠ ตรวจข้อมูล</span>':''}
       ${s.out+s.partial?`<span class="tag warn">ขาด ${s.out+s.partial} รายการ</span>`:''}
       ${po.appointment?`<span class="tag">🗓 นัดส่ง ${h(thDateTime(po.appointment.replace('T',' ')))}</span>`:''}
-      ${noJstCut(po)?'<span class="tag red end">⚠ ยังไม่ได้ตัด Stock JST</span>':''}
+      ${jstTagHtml(po)}
     </div>
     <div class="mini-steps">${STATUSES.map((x,i)=>`<i class="${i<=idx?'on':''}"></i>`).join('')}</div>
     <div class="card-foot">
@@ -1388,7 +1444,7 @@ function renderDetail(){
         <div class="pono">P.O. ${h(po.po_no)} ${po.seller?'• '+h(po.seller):''}</div>
         <div class="tags" style="margin-top:6px"><span class="badge ${d.cls}">${h(d.text)}</span>
           ${String(po.brands||'').split(',').filter(x=>x.trim()).map(b=>`<span class="tag">${h(b.trim())}</span>`).join('')}
-          ${noJstCut(po)?'<span class="tag red end">⚠ ยังไม่ได้ตัด Stock JST</span>':''}</div>
+          <span id="jstTag" class="end-wrap">${jstTagHtml(po)}</span></div>
       </div>
       ${po.file_url?`<a class="iconbtn" href="${h(po.file_url)}" target="_blank" rel="noopener" title="เปิดไฟล์ P.O.">${ICONS.pdf}<span class="hide-sm">PDF</span></a>`:''}
       ${po.email_link?`<a class="iconbtn" href="${h(po.email_link)}" target="_blank" rel="noopener" title="เปิดเมลต้นทาง">${ICONS.mail}</a>`:''}
@@ -1429,7 +1485,7 @@ function renderDetail(){
           ${fieldHtml(po,'due_date','กำหนดส่ง (เดดไลน์)','date','key')}
           ${fieldHtml(po,'appointment','นัดส่งสินค้า (วัน-เวลา)','datetime-local')}
           ${fieldHtml(po,'assignee','ผู้รับผิดชอบ','text','','placeholder="ชื่อผู้รับผิดชอบ"')}
-          ${fieldHtml(po,'jst_no','เลขออเดอร์ใน JST','text','','placeholder="เช่น SO-xxxx"')}
+          ${jstFieldHtml(po)}
           ${fieldHtml(po,'note','หมายเหตุ / รายละเอียดเพิ่มเติม','textarea','full','placeholder="เช่น ลูกค้าขอแยกกล่อง, รอสินค้าเข้าวันที่..."')}
         </div>
       </div>
@@ -1491,6 +1547,12 @@ function renderDetail(){
   $('#dClose').onclick=closeDetail;
   $$('[data-go]').forEach(b=>b.onclick=()=>changeStatus(b.dataset.go));
   $$('[data-f]').forEach(inp=>inp.onchange=()=>saveField(inp.dataset.f, inp.value));
+  $$('[data-jst]').forEach(inp=>inp.onchange=()=>{
+    const j=jstInfo(S.detail.po); const r=j.rows[Number(inp.dataset.jst)]; if(!r) return;
+    r.no=inp.value.trim();
+    saveField('jst_no', encodeJst(j.rows));
+    updateJstUi();
+  });
   $('#noteSend').onclick=addNote;
   $('#editItems').onclick=()=>openItemsEditor(po, items);
   const xo=$('#xlsOut'); if(xo) xo.onclick=()=>exportItemsExcel(po, items).catch(fail);
@@ -1553,6 +1615,14 @@ function itemHtml(it){
   </div>`;
 }
 
+/** อัปเดตป้าย/สถานะช่อง JST โดยไม่วาดหน้าใหม่ (ไม่ให้เคอร์เซอร์หลุดตอนกรอกหลายช่อง) */
+function updateJstUi(){
+  const po=S.detail && S.detail.po; if(!po) return;
+  const t=$('#jstTag'); if(t) t.innerHTML=jstTagHtml(po);
+  const j=jstInfo(po);
+  $$('.jst-row').forEach((row,i)=>{ const r=j.rows[i]; if(!r) return; row.classList.toggle('ok', !!r.no); $('.jb',row).textContent=(r.no?'✓ ':'⚠ ')+r.brand; });
+  const sm=$('.jst-sum b'); if(sm) sm.textContent=j.done+'/'+j.total;
+}
 function saveField(k, v){
   const po=S.detail.po;
   if(k==='appointment' && v) v=v.replace('T',' ');
