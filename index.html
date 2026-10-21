@@ -438,6 +438,8 @@ body.view-summary .fab{display:none}
 .ptable th,.ptable td{padding:7px 10px;border-top:1px solid var(--line);text-align:center;vertical-align:middle}
 .ptable .nm{text-align:left}
 .ptable .tot td{background:var(--soft);font-weight:600}
+.ptable .zero{color:var(--red)}
+.ptable .warnq{color:var(--orange)}
 .ptable th{font-size:12px;color:var(--muted);font-weight:600}
 .ptable .r{white-space:nowrap}
 .ptable .bc{white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -968,16 +970,26 @@ function pickRows(po){
   return itemsOf(po.id).map(it=>{
     const m=matchItem(it), p=MATCH_OK[m.status] ? m.product : null;
     return {barcode:it.barcode || (p && p.barcodes[0]) || '', sku:p ? p.sku : (it.jst_sku||''), name:(p && p.name) || it.name,
-      brand:it.brand, qty:Number(it.qty||0), unit:it.unit_note||'', note:it.item_note||'', state:itemState(it), warn:!p};
+      brand:it.brand, qty:Number(it.qty||0), unit:it.unit_note||'', note:it.item_note||'', state:itemState(it), warn:!p,
+      ready: it.qty_ready===''||it.qty_ready==null ? null : Number(it.qty_ready),
+      pick: it.qty_ready===''||it.qty_ready==null ? Number(it.qty||0) : Number(it.qty_ready)};
   });
 }
+/** ช่อง "จัดส่งได้": ใช้จำนวนพร้อมส่งที่เช็คแล้ว ถ้ายังไม่เช็คใช้จำนวนสั่ง */
+function pickCell(r){
+  if(r.ready===null) return '<b>'+num(r.qty)+'</b><div class="ref">ยังไม่เช็ค</div>';
+  if(r.ready===0) return '<b class="zero">0</b><div class="ref zero">ไม่มีสินค้า</div>';
+  if(r.ready<r.qty) return '<b>'+num(r.ready)+'</b><div class="ref warnq">ขาด '+num(r.qty-r.ready)+'</div>';
+  return '<b>'+num(r.ready)+'</b>';
+}
+const sumQty=(rows,k)=>rows.reduce((a,r)=>a+(Number(r[k])||0),0);
 function pickAggregate(pos){
   const map={}, out=[];
   pos.forEach(po=>pickRows(po).forEach(r=>{
     const key=r.sku || r.barcode || r.name;
     let g=map[key];
-    if(!g){ g=map[key]={barcode:r.barcode, sku:r.sku, name:r.name, brand:r.brand, qty:0, per:[]}; out.push(g); }
-    g.qty+=r.qty; g.per.push({po, qty:r.qty});
+    if(!g){ g=map[key]={barcode:r.barcode, sku:r.sku, name:r.name, brand:r.brand, qty:0, pick:0, unchecked:0, per:[]}; out.push(g); }
+    g.qty+=r.qty; g.pick+=r.pick; if(r.ready===null) g.unchecked++; g.per.push({po, qty:r.pick, ordered:r.qty});
   }));
   return out.sort((a,b)=>String(a.brand).localeCompare(String(b.brand)) || String(a.name).localeCompare(String(b.name)));
 }
@@ -997,12 +1009,12 @@ function renderSummary(){
     const rows=pickRows(po), d=dueInfo(po);
     return `<div class="pick-po ${S.pickSel[po.id]?'on':''}">
       <label class="pick-head"><input type="checkbox" data-sel="${h(po.id)}" ${S.pickSel[po.id]?'checked':''}>
-        <span class="t"><b>${h(po.customer)}</b> • P.O. ${h(po.po_no)}<br><span class="ref">${h(ST_LABEL[po.status])} • ${rows.length} รายการ • ${num(rows.reduce((a,r)=>a+r.qty,0))} ชิ้น</span></span>
+        <span class="t"><b>${h(po.customer)}</b> • P.O. ${h(po.po_no)}<br><span class="ref">${h(ST_LABEL[po.status])} • ${rows.length} รายการ • สั่ง ${num(sumQty(rows,'qty'))} • จัดส่งได้ ${num(sumQty(rows,'pick'))} ชิ้น</span></span>
         <span class="badge ${d.cls}">${h(d.text)}</span></label>
-      ${rows.length?`<div class="twrap"><table class="ptable"><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th class="r">จำนวน</th><th>หมายเหตุ</th></tr>
+      ${rows.length?`<div class="twrap"><table class="ptable"><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th class="r">สั่ง</th><th class="r">จัดส่งได้</th><th>หมายเหตุ</th></tr>
         ${rows.map(r=>`<tr><td class="bc">${h(r.barcode)}</td><td>${h(r.sku)||'-'}</td><td class="nm">${h(r.name)}${r.warn?' <span class="ref">⚠ ไม่พบใน JST</span>':''}${r.unit?`<div class="ref">${h(r.unit)}</div>`:''}</td>
-          <td class="r"><b>${num(r.qty)}</b>${stLbl[r.state]?`<div class="ref">${stLbl[r.state]}</div>`:''}</td><td>${h(r.note)}</td></tr>`).join('')}
-        <tr class="tot"><td colspan="3">รวม ${rows.length} รายการ</td><td class="r">${num(rows.reduce((a,r)=>a+r.qty,0))}</td><td></td></tr></table></div>`
+          <td class="r">${num(r.qty)}</td><td class="r">${pickCell(r)}</td><td>${h(r.note)}</td></tr>`).join('')}
+        <tr class="tot"><td colspan="3">รวม ${rows.length} รายการ</td><td class="r">${num(sumQty(rows,'qty'))}</td><td class="r">${num(sumQty(rows,'pick'))}</td><td></td></tr></table></div>`
         : `<div class="empty" style="padding:12px">ยังไม่มีรายการสินค้า <button class="btn sm" data-openpo="${h(po.id)}">เปิด P.O. เพื่อเพิ่ม</button></div>`}
     </div>`;
   };
@@ -1014,13 +1026,13 @@ function renderSummary(){
     </div>
     ${mode==='po' ? (pos.length ? pos.map(poBlock).join('') : '<div class="empty">ไม่มี P.O. ที่ต้องจัด</div>')
       : (sel.length ? `<div class="pick-po on"><div class="pick-head" style="cursor:default"><span class="t"><b>รวมจำนวนหยิบ</b><br><span class="ref">${sel.map(p=>h(p.customer)+' '+h(p.po_no)).join(' • ')}</span></span></div>
-          <div class="twrap"><table class="ptable"><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th class="r">รวม</th><th>แยกตาม P.O.</th></tr>
-          ${agg.map((g,i)=>`<tr><td>${i+1}</td><td class="bc">${h(g.barcode)}</td><td>${h(g.sku)||'-'}</td><td class="nm">${h(g.name)}${g.brand?`<div class="ref">${h(g.brand)}</div>`:''}</td><td class="r"><b>${num(g.qty)}</b></td>
+          <div class="twrap"><table class="ptable"><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th class="r">สั่ง</th><th class="r">จัดส่งได้ (หยิบ)</th><th>แยกตาม P.O.</th></tr>
+          ${agg.map((g,i)=>`<tr><td>${i+1}</td><td class="bc">${h(g.barcode)}</td><td>${h(g.sku)||'-'}</td><td class="nm">${h(g.name)}${g.brand?`<div class="ref">${h(g.brand)}</div>`:''}</td><td class="r">${num(g.qty)}</td><td class="r"><b class="${g.pick===0?'zero':''}">${num(g.pick)}</b>${g.unchecked?`<div class="ref">ยังไม่เช็ค ${g.unchecked} ใบ</div>`:''}</td>
             <td class="ref">${g.per.map(x=>h(x.po.customer)+' '+num(x.qty)).join(' • ')}</td></tr>`).join('')}
-          <tr class="tot"><td colspan="4">รวมทั้งหมด ${agg.length} รายการ</td><td class="r">${num(agg.reduce((a,g)=>a+g.qty,0))}</td><td></td></tr></table></div></div>`
+          <tr class="tot"><td colspan="4">รวมทั้งหมด ${agg.length} รายการ</td><td class="r">${num(sumQty(agg,'qty'))}</td><td class="r">${num(sumQty(agg,'pick'))}</td><td></td></tr></table></div></div>`
         : '<div class="empty">ติ๊กเลือก P.O. ในแท็บ “แยกตาม P.O.” ก่อน</div>')}
     <div class="pick-bar">
-      <span class="t">เลือก <b>${sel.length}</b>/${pos.length} ใบ • ${selRows.length} รายการ • ${num(selRows.reduce((a,r)=>a+r.qty,0))} ชิ้น</span>
+      <span class="t">เลือก <b>${sel.length}</b>/${pos.length} ใบ • ${selRows.length} รายการ • จัดส่งได้ ${num(sumQty(selRows,'pick'))} ชิ้น</span>
       <button class="btn sm" id="pkAll">${sel.length===pos.length && pos.length?'ยกเลิกทั้งหมด':'เลือกทั้งหมด'}</button>
       <button class="btn sm" id="pkXls">⬇ Excel</button>
       <button class="btn sm primary" id="pkPrint">🖨 พิมพ์ / PDF</button>
@@ -1035,12 +1047,12 @@ function renderSummary(){
 }
 /** ใบจัดสินค้าของ P.O. เดียว (เปิดจากหน้า P.O. ขั้น "กำลังจัดเตรียมสินค้า") */
 function openPoPick(po){
-  const rows=pickRows(po), total=rows.reduce((a,r)=>a+r.qty,0);
+  const rows=pickRows(po), total=sumQty(rows,'qty'), totalPick=sumQty(rows,'pick');
   const md=openModal(`<div class="modal-head">📋 สรุปสินค้าที่ต้องจัด</div><div class="modal-body">
     <div class="ref"><b style="color:var(--ink)">${h(po.customer)}</b> • P.O. ${h(po.po_no)} • กำหนดส่ง ${h(thDate(po.due_date,true))}</div>
-    ${rows.length?`<div class="twrap"><table class="ptable"><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th class="r">จำนวน</th><th>หมายเหตุ</th></tr>
-      ${rows.map((r,i)=>`<tr><td>${i+1}</td><td class="bc">${h(r.barcode)}</td><td>${h(r.sku)||'-'}</td><td class="nm">${h(r.name)}${r.unit?`<div class="ref">${h(r.unit)}</div>`:''}</td><td class="r"><b>${num(r.qty)}</b></td><td>${h(r.note)}</td></tr>`).join('')}
-      <tr class="tot"><td colspan="4">รวม ${rows.length} รายการ</td><td class="r">${num(total)}</td><td></td></tr></table></div>`
+    ${rows.length?`<div class="twrap"><table class="ptable"><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th class="r">สั่ง</th><th class="r">จัดส่งได้</th><th>หมายเหตุ</th></tr>
+      ${rows.map((r,i)=>`<tr><td>${i+1}</td><td class="bc">${h(r.barcode)}</td><td>${h(r.sku)||'-'}</td><td class="nm">${h(r.name)}${r.unit?`<div class="ref">${h(r.unit)}</div>`:''}</td><td class="r">${num(r.qty)}</td><td class="r">${pickCell(r)}</td><td>${h(r.note)}</td></tr>`).join('')}
+      <tr class="tot"><td colspan="4">รวม ${rows.length} รายการ</td><td class="r">${num(total)}</td><td class="r">${num(totalPick)}</td><td></td></tr></table></div>`
       : '<div class="empty" style="padding:12px">ยังไม่มีรายการสินค้า</div>'}
   </div><div class="modal-foot"><button class="btn" data-all>รวมกับ P.O. อื่น →</button><span style="flex:1"></span>
     <button class="btn" data-x>ปิด</button><button class="btn" data-xls>⬇ Excel</button><button class="btn primary" data-print>🖨 พิมพ์ / PDF</button></div>`, true);
@@ -1138,12 +1150,14 @@ async function exportPickExcel(only){
   try{
     await loadScript(XLSX_SRC);
     const wb=XLSX.utils.book_new();
-    const a=[['ลำดับ','บาร์โค้ด','SKU','ชื่อสินค้า','แบรนด์','จำนวนรวม (ชิ้น)','แยกตาม P.O.','หยิบแล้ว ✓']]
-      .concat(d.agg.map((g,i)=>[i+1,g.barcode,g.sku,g.name,g.brand,g.qty,g.per.map(x=>x.po.customer+' '+x.po.po_no+': '+x.qty).join(' | '),'']));
-    const b=[['ลูกค้า','เลข P.O.','กำหนดส่ง','สถานะ','บาร์โค้ด','SKU','ชื่อสินค้า','จำนวน (ชิ้น)','หน่วยตาม P.O.','หมายเหตุ']];
-    d.pos.forEach(po=>pickRows(po).forEach(r=>b.push([po.customer,po.po_no,po.due_date,ST_LABEL[po.status],r.barcode,r.sku,r.name,r.qty,r.unit,r.note])));
-    const w1=XLSX.utils.aoa_to_sheet(a); w1['!cols']=[{wch:6},{wch:16},{wch:16},{wch:48},{wch:12},{wch:14},{wch:50},{wch:10}];
-    const w2=XLSX.utils.aoa_to_sheet(b); w2['!cols']=[{wch:18},{wch:18},{wch:12},{wch:16},{wch:16},{wch:16},{wch:48},{wch:12},{wch:14},{wch:24}];
+    const a=[['ลำดับ','บาร์โค้ด','SKU','ชื่อสินค้า','แบรนด์','จำนวนสั่ง','จัดส่งได้ (หยิบ)','แยกตาม P.O.','หยิบแล้ว ✓']]
+      .concat(d.agg.map((g,i)=>[i+1,g.barcode,g.sku,g.name,g.brand,g.qty,g.pick,g.per.map(x=>x.po.customer+' '+x.po.po_no+': '+x.qty).join(' | '),'']))
+      .concat([['','','','รวม','',sumQty(d.agg,'qty'),sumQty(d.agg,'pick'),'','']]);
+    const b=[['ลูกค้า','เลข P.O.','กำหนดส่ง','สถานะ','บาร์โค้ด','SKU','ชื่อสินค้า','จำนวนสั่ง','จัดส่งได้','สถานะเช็ค','หน่วยตาม P.O.','หมายเหตุ']];
+    d.pos.forEach(po=>pickRows(po).forEach(r=>b.push([po.customer,po.po_no,po.due_date,ST_LABEL[po.status],r.barcode,r.sku,r.name,r.qty,r.pick,
+      r.ready===null?'ยังไม่เช็ค':r.ready===0?'ไม่มีสินค้า':r.ready<r.qty?'ขาด '+(r.qty-r.ready):'ครบ', r.unit,r.note])));
+    const w1=XLSX.utils.aoa_to_sheet(a); w1['!cols']=[{wch:6},{wch:16},{wch:16},{wch:48},{wch:12},{wch:11},{wch:15},{wch:50},{wch:10}];
+    const w2=XLSX.utils.aoa_to_sheet(b); w2['!cols']=[{wch:18},{wch:18},{wch:12},{wch:16},{wch:16},{wch:16},{wch:48},{wch:11},{wch:11},{wch:12},{wch:14},{wch:24}];
     XLSX.utils.book_append_sheet(wb,w1,'รวมหยิบ'); XLSX.utils.book_append_sheet(wb,w2,'แยกตาม P.O.');
     const name='ใบจัดสินค้า_'+S.today+'.xlsx';
     if(MODE!=='gas'){ XLSX.writeFile(wb,name); return; }
@@ -1158,21 +1172,21 @@ function printPickList(only){
   const css=`body{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;margin:18px}
     h1{font-size:18px;margin:0}h2{font-size:14px;margin:18px 0 6px}.sub{color:#555;margin:2px 0 10px}
     table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{border:1px solid #999;padding:4px 6px;text-align:center;vertical-align:middle}
-    th{background:#eee}.nm{text-align:left}.ck{width:34px}.tot td{background:#f5f5f5;font-weight:600}.po{break-inside:avoid;margin-bottom:12px}
+    th{background:#eee}.nm{text-align:left}.ck{width:34px}.tot td{background:#f5f5f5;font-weight:600}.ref{color:#666;font-size:10px}.zero{color:#c00}.po{break-inside:avoid;margin-bottom:12px}
     .sign{display:flex;gap:40px;margin-top:24px}.sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}
     @page{size:A4;margin:12mm}@media print{.noprint{display:none}}`;
   const logo=($('#logoImg')||{}).src||'';
   const head=`<div style="display:flex;align-items:center;gap:12px">${logo?`<img src="${logo}" style="height:34px" alt="2NK">`:''}<h1>ใบจัดสินค้า (Picking List)</h1></div><div class="sub">พิมพ์เมื่อ ${now.toLocaleString('th-TH')} • โดย ${esc(S.user)} • ${d.pos.length} P.O.</div>
     <table><tr><th>ลูกค้า</th><th>เลข P.O.</th><th>กำหนดส่ง</th><th>นัดส่ง</th><th>ส่งที่</th></tr>
     ${d.pos.map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(p.po_no)}</td><td>${esc(thDate(p.due_date,true))}</td><td>${esc(p.appointment||'')}</td><td>${esc(p.ship_to||'')}</td></tr>`).join('')}</table>`;
-  const sum=`<h2>รวมจำนวนหยิบ</h2><table><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวน</th><th>แยกตาม P.O.</th><th class="ck">หยิบ</th></tr>
-    ${d.agg.map((g,i)=>`<tr><td>${i+1}</td><td>${esc(g.barcode)}</td><td>${esc(g.sku)}</td><td class="nm">${esc(g.name)}</td><td><b>${num(g.qty)}</b></td>
+  const sum=`<h2>รวมจำนวนหยิบ</h2><table><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>สั่ง</th><th>จัดส่งได้ (หยิบ)</th><th>แยกตาม P.O.</th><th class="ck">หยิบ</th></tr>
+    ${d.agg.map((g,i)=>`<tr><td>${i+1}</td><td>${esc(g.barcode)}</td><td>${esc(g.sku)}</td><td class="nm">${esc(g.name)}</td><td>${num(g.qty)}</td><td><b class="${g.pick===0?'zero':''}">${num(g.pick)}</b>${g.unchecked?'<div class="ref">ยังไม่เช็ค</div>':''}</td>
       <td>${g.per.map(x=>esc(x.po.customer)+' '+num(x.qty)).join(', ')}</td><td class="ck">☐</td></tr>`).join('')}
-    <tr class="tot"><td colspan="4">รวมทั้งหมด ${d.agg.length} รายการ</td><td>${num(d.agg.reduce((a,g)=>a+g.qty,0))}</td><td colspan="2"></td></tr></table>`;
+    <tr class="tot"><td colspan="4">รวมทั้งหมด ${d.agg.length} รายการ</td><td>${num(sumQty(d.agg,'qty'))}</td><td>${num(sumQty(d.agg,'pick'))}</td><td colspan="2"></td></tr></table>`;
   const per=`<h2>แยกตาม P.O.</h2>`+d.pos.map(po=>`<div class="po"><b>${esc(po.customer)} • P.O. ${esc(po.po_no)}</b> — กำหนดส่ง ${esc(thDate(po.due_date,true))}
-    <table><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวน</th><th>หมายเหตุ</th><th class="ck">✓</th></tr>
-    ${pickRows(po).map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}${r.unit?' ('+esc(r.unit)+')':''}</td><td>${num(r.qty)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('')}
-    <tr class="tot"><td colspan="3">รวม ${pickRows(po).length} รายการ</td><td>${num(pickRows(po).reduce((a,r)=>a+r.qty,0))}</td><td colspan="2"></td></tr></table></div>`).join('');
+    <table><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>สั่ง</th><th>จัดส่งได้</th><th>หมายเหตุ</th><th class="ck">✓</th></tr>
+    ${pickRows(po).map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}${r.unit?' ('+esc(r.unit)+')':''}</td><td>${num(r.qty)}</td><td>${pickCell(r)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('')}
+    <tr class="tot"><td colspan="3">รวม ${pickRows(po).length} รายการ</td><td>${num(sumQty(pickRows(po),'qty'))}</td><td>${num(sumQty(pickRows(po),'pick'))}</td><td colspan="2"></td></tr></table></div>`).join('');
   const html=`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบจัดสินค้า ${S.today}</title>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet"><style>${css}</style></head>
     <body>${head}${sum}${per}
@@ -1184,6 +1198,7 @@ function printPickList(only){
     #printArea th,#printArea td{border:1px solid #999;padding:4px 6px;text-align:center;vertical-align:middle;color:#111;background:#fff}
     #printArea th{background:#eee}#printArea .nm{text-align:left}#printArea .ck{width:34px}#printArea .tot td{background:#f5f5f5;font-weight:600}
     #printArea .po{break-inside:avoid;page-break-inside:avoid;margin-bottom:12px}#printArea tr{break-inside:avoid;page-break-inside:avoid}
+    #printArea .ref{color:#666;font-size:10px}#printArea .zero{color:#c00}
     #printArea .sign{display:flex;gap:40px;margin-top:24px}#printArea .sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}`;
   showDocView(html, 'ใบจัดสินค้า • '+d.pos.length+' P.O.', {css:pcss, body:`${head}${sum}${per}<div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>`});
 }
