@@ -407,33 +407,25 @@ body.locked .top, body.locked main, body.locked .fab, body.locked #demoBar{displ
 .badge.dup{background:rgba(139,92,246,.15);color:#7c3aed}
 .card-act{border:1px solid var(--line);background:var(--card);border-radius:8px;width:32px;height:30px;flex:none;opacity:.75}
 .card-act:hover{opacity:1;border-color:var(--red)}
-.alloc-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1px solid var(--accent);background:var(--accent-soft);border-radius:12px;padding:10px 14px;margin-bottom:10px}
-.alloc-bar .t{flex:1;min-width:200px;font-size:14px}
-.al-pos{display:grid;grid-auto-rows:max-content;gap:6px;max-height:52vh;overflow:auto}
-.al-po{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer}
-.al-po.on{border-color:var(--accent);background:var(--accent-soft)}
-.al-po input{width:20px;height:20px;accent-color:var(--accent);flex:none}
-.al-po .t{flex:1;min-width:0}
-.al-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
-.al-tools input[type=search]{flex:1 1 200px;min-width:0;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:8px 10px;color:var(--ink)}
-.al-list{display:grid;grid-auto-rows:max-content;gap:10px;max-height:58vh;overflow:auto;padding-right:2px}
-.al-prod{border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.al-prod.short{border-color:var(--orange)}
-.al-prod.full{border-color:var(--accent)}
-.al-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--soft);padding:9px 12px}
-.al-head .nm{flex:1 1 220px;min-width:0;font-weight:600;font-size:14px;word-break:break-word}
-.al-head .nm small{display:block;color:var(--muted);font-weight:400;font-size:12px}
-.al-head .have{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
-.al-row{display:flex;gap:10px;align-items:center;padding:7px 12px;border-top:1px solid var(--line);font-size:13.5px}
-.al-row .po{flex:1;min-width:0}
-.al-row .po small{display:block;color:var(--muted);font-size:12px}
-.al-row .od{color:var(--muted);white-space:nowrap;font-size:12.5px}
-.al-in{width:84px;flex:none;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 8px;text-align:right;font-size:15px;color:var(--ink)}
-.al-in:focus{outline:2px solid var(--accent);outline-offset:-1px}
-.al-in.chg{border-color:var(--accent);background:var(--accent-soft)}
-.al-in.over{border-color:var(--red);color:var(--red)}
-.al-sum{font-size:12.5px;color:var(--muted);white-space:nowrap}
-@media (max-width:640px){ .al-list{max-height:none} .al-head .have{width:100%} .al-in{width:76px} }
+.fab-alloc{bottom:78px;background:var(--card);color:var(--accent);border:1.5px solid var(--accent)}
+.fab-alloc[hidden]{display:none}
+body:has(#btnAllocFab:not([hidden])) main{padding-bottom:150px}
+.fab-alloc .n{background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:1px 8px;font-size:12.5px;margin-left:4px}
+.fab-alloc .n:empty{display:none}
+.alloc-menu{position:fixed;right:18px;bottom:138px;z-index:35;width:min(330px,calc(100vw - 36px));background:var(--card);border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 14px 36px rgba(0,0,0,.45);padding:8px;display:grid;gap:4px}
+.alloc-menu .am-h{padding:6px 8px 8px;font-weight:700}
+.alloc-menu .am-h small{display:block;color:var(--muted);font-weight:400;font-size:12.5px;margin-top:2px}
+.alloc-menu button,.alloc-menu .am-up{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:11px 12px;font-size:14.5px;font-weight:600;cursor:pointer}
+.alloc-menu button:hover,.alloc-menu .am-up:hover{border-color:var(--accent);color:var(--accent)}
+.alloc-menu button:disabled{opacity:.5;cursor:default;color:var(--muted);border-color:var(--line)}
+.alloc-menu .am-up{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.am-po{border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin-top:8px}
+.am-lines{font-size:13px;margin-top:4px;color:var(--ink)}
+.card-ck{display:flex;align-items:center;justify-content:center;width:30px;height:30px;margin:-3px 2px 0 -4px;flex:none;cursor:pointer}
+.card-ck input{width:21px;height:21px;accent-color:var(--accent);cursor:pointer}
+.card.asel{box-shadow:0 0 0 2px var(--accent)}
+body.has-overlay .fab-alloc,body:has(.modal) .alloc-menu{display:none}
 .dup-banner{width:100%;text-align:left;border:0;border-radius:12px;padding:10px 14px;margin-bottom:10px;color:#fff;font-weight:600;
   background:linear-gradient(135deg,#8b5cf6,#6d28d9);box-shadow:0 4px 14px rgba(124,58,237,.25)}
 .review{border-width:1px 1px 1px 5px}
@@ -530,6 +522,7 @@ body.view-summary .fab{display:none}
   </nav>
 </header>
 <main id="content"><div class="loading"><span class="spin"></span> กำลังโหลด…</div></main>
+<button class="fab fab-alloc" id="btnAllocFab" hidden>📦 Allocate <span class="n" id="allocN"></span></button>
 <button class="fab" id="btnNew">＋ เพิ่ม P.O.</button>
 <div id="overlayRoot"></div>
 <div id="modalRoot"></div>
@@ -1033,6 +1026,7 @@ function bindTop(){
   $('#btnRefresh').onclick=()=>{ load(); toast('รีเฟรชแล้ว'); };
   $('#btnUser').onclick=openUserMenu;
   $('#btnNew').onclick=()=>openNewPo();
+  $('#btnAllocFab').onclick=openAllocMenu;
   $('#btnImport').onclick=importNow;
   $('#btnSettings').onclick=openSettings;
 }
@@ -1055,6 +1049,7 @@ async function importNow(){
  * ========================================================= */
 function render(){
   document.body.classList.toggle('view-summary', S.view==='summary');
+  updateAllocFab();
   if(S.view==='summary') renderSummary(); else renderList();
   if(S.detail) renderDetail();
 }
@@ -1113,7 +1108,6 @@ function renderList(){
       <button class="kpi yellow ${f.due==='soon'?'on':''}" data-due="soon"><b>${k.soon}</b><span>ภายใน ${warnDays()} วัน</span></button>
     </div>
     ${cnt('DUPLICATE') && f.status!=='DUPLICATE' ? `<button class="dup-banner" id="dupBanner">🟣 มี P.O. เลขซ้ำรอตรวจ ${cnt('DUPLICATE')} ใบ — แตะเพื่อตรวจว่าเป็นการอัปเดตหรือไม่</button>`:''}
-    ${cnt('CHECKING') ? `<div class="alloc-bar"><span class="t">📦 <b>Allocate สินค้าพร้อมส่ง</b> — ติ๊กเลือกหลาย P.O. ในขั้น “ตรวจสินค้าพร้อมส่ง” แล้วใส่จำนวนที่ส่งได้ทีเดียว (${cnt('CHECKING')} ใบรออยู่)</span><button class="btn sm primary" id="btnAlloc">📦 Allocate หลาย P.O.</button></div>`:''}
     <div class="chips">
       ${[['OPEN','ยังไม่ส่ง',k.open],['NOJST','⚠ ยังไม่ได้ตัด Stock JST',S.pos.filter(noJstCut).length,'red'],['NODOC','⚠ ยังไม่ได้จัดทำเอกสาร',S.pos.filter(noDoc).length,'red']].concat(S.pos.some(maybeNotPo)||f.status==='NOTPO'?[['NOTPO','⚠ อาจไม่ใช่ P.O.',S.pos.filter(maybeNotPo).length,'red']]:[]).concat(STATUSES.map(s=>[s.key,(ST_IDX[s.key]+1)+'. '+s.label,cnt(s.key)]))
         .concat([['DUPLICATE','🟣 เลขซ้ำ',cnt('DUPLICATE')],['SUPERSEDED','ใบเก่า',cnt('SUPERSEDED')],['CANCELLED','ยกเลิก',cnt('CANCELLED')],
@@ -1130,11 +1124,14 @@ function renderList(){
 
   $$('.kpi').forEach(b=>b.onclick=()=>{ f.due=b.dataset.due; if(f.due||f.status!=='ALL') f.status='OPEN'; renderList(); });
   $$('.chip').forEach(b=>b.onclick=()=>{ f.status=b.dataset.st; f.due=''; renderList(); });
-  const ab=$('#btnAlloc'); if(ab) ab.onclick=()=>openAllocate();
   const q=$('#q'); q.oninput=()=>{ f.q=q.value; clearTimeout(q._t); q._t=setTimeout(()=>{ renderList(); const n=$('#q'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
   $('#fCust').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกลูกค้า', opts:customerOpts('ลูกค้าทั้งหมด'), cur:f.customer, onPick:v=>{ f.customer=v; renderList(); }});
   $('#fSort').onclick=e=>ddToggle(e.currentTarget,{title:'เรียงลำดับ', opts:SORTS, cur:f.sort, search:false, onPick:v=>{ f.sort=v; renderList(); }});
   $$('.card').forEach(c=>c.onclick=()=>openDetail(c.dataset.id));
+  $$('.card [data-ack]').forEach(l=>{ l.onclick=e=>e.stopPropagation();
+    const cb=$('input',l), card=l.closest('.card'); card.classList.toggle('asel', cb.checked);
+    cb.onchange=()=>{ const id=card.dataset.id; if(cb.checked) S.allocSel[id]=true; else delete S.allocSel[id]; card.classList.toggle('asel', cb.checked); updateAllocFab(); }; });
+  updateAllocFab();
   $$('.card [data-del]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); deletePo(b.closest('.card').dataset.id); });
   $$('.card [data-restore]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); restorePo(b.closest('.card').dataset.id); });
   const db=$('#dupBanner'); if(db) db.onclick=()=>{ f.status='DUPLICATE'; f.due=''; renderList(); };
@@ -1147,6 +1144,7 @@ function cardHtml(po){
   const kind = po.status==='DUPLICATE'?'is-dup': po.status==='SUPERSEDED'?'is-old': po.status==='DELETED'?'is-del': po.replaces?'is-new':'';
   return `<div class="card due-${d.cls} ${isClosed(po)&&!kind?'done':''} ${kind}" data-id="${h(po.id)}">
     <div class="card-top">
+      ${S.filter.status==='CHECKING' && po.status==='CHECKING' ? `<label class="card-ck" data-ack title="เลือกเพื่อ Allocate"><input type="checkbox" ${S.allocSel[po.id]?'checked':''}></label>`:''}
       <div class="card-title"><div class="cust">${h(po.customer||'ยังไม่ระบุลูกค้า')}</div><div class="pono">P.O. ${h(po.po_no)}</div></div>
       <span class="badge ${d.cls}">${h(d.text)}</span>
       ${po.status==='DELETED' ? '<button class="card-act" data-restore title="กู้คืน P.O.">'+ICONS.restore+'</button>' : '<button class="card-act" data-del title="ลบ P.O.">'+ICONS.trash+'</button>'}
@@ -1360,175 +1358,112 @@ async function importItemsExcel(po, file){
   $('[data-ok]',md.el).onclick=()=>{ md.close(); saveItems(updates, 'อัปเดตจาก Excel แล้ว '+updates.length+' รายการ'); };
 }
 
-/* ---------- Allocate หลาย P.O. พร้อมกัน ----------
-   เลือก P.O. (ค่าเริ่มต้น = ขั้นตรวจสินค้าพร้อมส่ง) → รวมตามสินค้า → ใส่จำนวนพร้อมส่งของแต่ละ P.O.
-   หรือใส่ "มีของ" แล้วกระจายให้ใบที่กำหนดส่งก่อน → บันทึกทีเดียว (updateItems แยกตาม P.O.)
-   Excel: ไฟล์เดียวทุก P.O. ที่เลือก แก้คอลัมน์ "จำนวนพร้อมส่ง" แล้วนำเข้ากลับมาที่หน้านี้ */
-function allocCandidates(){
-  return S.pos.filter(p=>['RECEIVED','CHECKING','PICKED','READY'].includes(p.status) && itemsOf(p.id).length)
-    .sort((a,b)=>(a.status==='CHECKING'?0:1)-(b.status==='CHECKING'?0:1) || (a.due_date||'9999').localeCompare(b.due_date||'9999'));
+/* ---------- Allocate หลาย P.O. (ขั้น 2 ตรวจสินค้าพร้อมส่ง) ----------
+   ติ๊กเลือกการ์ด P.O. ในหัวข้อ "2. ตรวจสินค้าพร้อมส่ง" → ปุ่มลอย 📦 Allocate → ดึง Excel ไฟล์เดียว
+   (เรียง P.O. ตามลำดับในหน้า บนลงล่าง / สินค้าตามลำดับในใบ P.O.) → แก้ "จำนวนพร้อมส่ง" → อัพกลับ → อัปเดตแยกตามเลข P.O. */
+S.allocSel = {};
+function allocSelected(){
+  // ตามลำดับที่แสดงในหน้ารวม
+  return filteredPos().filter(p=>p.status==='CHECKING' && S.allocSel[p.id]);
 }
-function openAllocate(){
-  const all=allocCandidates();
-  if(!all.length){ toast('ยังไม่มี P.O. ที่มีรายการสินค้าให้ Allocate', true); return; }
-  const sel={}; all.forEach(p=>{ if(p.status==='CHECKING') sel[p.id]=true; });
-  let showAll=false;
-  const md=openModal(`<div class="modal-head">📦 Allocate สินค้าพร้อมส่ง • เลือก P.O.</div><div class="modal-body">
-      <div class="al-tools"><span class="ref" style="flex:1">ติ๊กเลือก P.O. ที่จะใส่จำนวนพร้อมส่งพร้อมกัน</span>
-        <label class="ref" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="alShowAll"> แสดงขั้นอื่นด้วย</label>
-        <button class="btn sm" id="alSelAll">เลือกทั้งหมด</button></div>
-      <div class="al-pos" id="alPos"></div></div>
-    <div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" id="alNext">ถัดไป →</button></div>`, true);
-  const vis=()=>all.filter(p=>showAll || p.status==='CHECKING');
-  const draw=()=>{
-    const list=vis();
-    $('#alPos',md.el).innerHTML = list.length ? list.map(p=>{ const its=itemsOf(p.id), done=its.filter(i=>i.qty_ready!==''&&i.qty_ready!=null).length;
-      return `<label class="al-po ${sel[p.id]?'on':''}"><input type="checkbox" data-id="${h(p.id)}" ${sel[p.id]?'checked':''}>
-        <span class="t"><b>${h(p.customer)}</b> • P.O. ${h(p.po_no)}<br><span class="ref">${h(ST_LABEL[p.status]||p.status)} • ส่ง ${h(thDate(p.due_date,true))} • ${its.length} รายการ • เช็คแล้ว ${done}/${its.length}</span></span>
-        <span class="badge ${dueInfo(p).cls}">${h(dueInfo(p).text)}</span></label>`; }).join('')
-      : '<div class="empty">ไม่มี P.O. ในขั้น “ตรวจสินค้าพร้อมส่ง” — ติ๊ก “แสดงขั้นอื่นด้วย”</div>';
-    $$('[data-id]',md.el).forEach(c=>c.onchange=()=>{ if(c.checked) sel[c.dataset.id]=true; else delete sel[c.dataset.id]; draw(); });
-    const n=list.filter(p=>sel[p.id]).length;
-    $('#alNext',md.el).textContent='ถัดไป ('+n+' ใบ) →'; $('#alNext',md.el).disabled=!n;
-    $('#alSelAll',md.el).textContent = n===list.length && n ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด';
-  };
-  $('#alShowAll',md.el).onchange=e=>{ showAll=e.target.checked; if(!showAll) all.forEach(p=>{ if(p.status!=='CHECKING') delete sel[p.id]; }); draw(); };
-  $('#alSelAll',md.el).onclick=()=>{ const list=vis(), on=list.every(p=>sel[p.id]); list.forEach(p=>{ if(on) delete sel[p.id]; else sel[p.id]=true; }); draw(); };
-  $('[data-x]',md.el).onclick=()=>md.close();
-  $('#alNext',md.el).onclick=()=>{ const pos=vis().filter(p=>sel[p.id]); md.close(); openAllocateEditor(pos); };
-  draw();
+function updateAllocFab(){
+  const b=$('#btnAllocFab'); if(!b) return;
+  const show = S.view!=='summary' && S.pos.some(p=>p.status==='CHECKING');
+  b.hidden=!show;
+  Object.keys(S.allocSel).forEach(id=>{ const p=S.pos.find(x=>x.id===id); if(!p || p.status!=='CHECKING') delete S.allocSel[id]; });
+  const n=Object.keys(S.allocSel).length;
+  $('#allocN').textContent = n ? n+' ใบ' : '';
+  if(!show) closeAllocMenu();
 }
-function allocKey(it){
-  const m=matchItem(it), p=MATCH_OK[m.status] ? m.product : null;
-  return p && p.sku ? 'S:'+p.sku : it.barcode ? 'B:'+it.barcode : 'N:'+String(it.name||'').trim().toLowerCase();
+function closeAllocMenu(){ const m=$('#allocMenu'); if(m) m.remove(); }
+function openAllocMenu(){
+  if($('#allocMenu')){ closeAllocMenu(); return; }
+  const f=S.filter;
+  if(f.status!=='CHECKING'){ f.status='CHECKING'; f.due=''; renderList(); toast('ติ๊กเลือก P.O. ที่จะ Allocate ที่ช่องมุมซ้ายบนของแต่ละใบ'); }
+  const sel=allocSelected(), all=filteredPos().filter(p=>p.status==='CHECKING');
+  const m=document.createElement('div'); m.id='allocMenu'; m.className='alloc-menu';
+  m.innerHTML=`<div class="am-h">📦 Allocate สินค้าพร้อมส่ง<small>เลือกแล้ว ${sel.length} / ${all.length} ใบ (หัวข้อ 2. ตรวจสินค้าพร้อมส่ง)</small></div>
+    <button type="button" data-am="all">${sel.length===all.length && all.length ? '☐ ยกเลิกที่เลือกทั้งหมด' : '☑ เลือกทั้งหมด ('+all.length+' ใบ)'}</button>
+    <button type="button" data-am="out" ${sel.length?'':'disabled'}>⬇ ดึง Excel ${sel.length?'('+sel.length+' ใบที่เลือก)':'— ติ๊กเลือก P.O. ก่อน'}</button>
+    <label class="am-up">⬆ อัพ Excel ที่แก้เสร็จแล้ว<input type="file" accept=".xlsx,.xls,.csv" hidden></label>`;
+  document.body.appendChild(m);
+  $('[data-am="all"]',m).onclick=()=>{ const on=all.length && all.every(p=>S.allocSel[p.id]); all.forEach(p=>{ if(on) delete S.allocSel[p.id]; else S.allocSel[p.id]=true; }); closeAllocMenu(); renderList(); openAllocMenu(); };
+  $('[data-am="out"]',m).onclick=()=>{ closeAllocMenu(); exportAllocPOs(allocSelected()).catch(fail); };
+  $('input',m).onchange=e=>{ const file=e.target.files[0]; e.target.value=''; closeAllocMenu(); if(file) importAllocUpload(file).catch(fail); };
 }
-function allocGroups(pos){
-  const map={}, out=[];
-  pos.forEach(po=>itemsOf(po.id).forEach(it=>{
-    const k=allocKey(it), m=matchItem(it), p=MATCH_OK[m.status] ? m.product : null;
-    let g=map[k]; if(!g){ g=map[k]={key:k, name:(p&&p.name)||it.name, barcode:it.barcode||(p&&p.barcodes[0])||'', sku:p?p.sku:(it.jst_sku||''), brand:it.brand||'', rows:[]}; out.push(g); }
-    g.rows.push({po, it, qty:Number(it.qty)||0});
-  }));
-  out.forEach(g=>g.rows.sort((a,b)=>(a.po.due_date||'9999').localeCompare(b.po.due_date||'9999') || String(a.po.created_at).localeCompare(String(b.po.created_at))));
-  return out.sort((a,b)=>String(a.name).localeCompare(String(b.name),'th'));
-}
-function openAllocateEditor(pos){
-  const groups=allocGroups(pos);
-  const rk=r=>r.po.id+'|'+r.it.line;
-  const orig={}, val={};
-  groups.forEach(g=>g.rows.forEach(r=>{ const v=r.it.qty_ready===''||r.it.qty_ready==null ? '' : String(Number(r.it.qty_ready)); orig[rk(r)]=v; val[rk(r)]=v; }));
-  let q='';
-  const md=openModal(`<div class="modal-head">📦 Allocate • ${pos.length} P.O. • ${groups.length} สินค้า</div><div class="modal-body">
-      <div class="al-tools"><input type="search" id="alQ" placeholder="🔎 ค้นหาสินค้า / บาร์โค้ด / SKU">
-        <button class="btn sm" id="alFull" title="ใส่จำนวนพร้อมส่ง = จำนวนสั่ง ในช่องที่ยังว่าง">✓ เต็มจำนวน (ช่องว่าง)</button>
-        <button class="btn sm" id="alXo">⬇ Excel</button>
-        <label class="btn sm">⬆ นำเข้า Excel<input type="file" id="alXi" accept=".xlsx,.xls,.csv" hidden></label></div>
-      <div class="ref" style="margin-bottom:8px">ใส่จำนวนที่ส่งได้ของแต่ละ P.O. หรือใส่ <b>“มีของ”</b> ของสินค้านั้นแล้วระบบกระจายให้ใบที่กำหนดส่งก่อน • ช่องว่าง = ยังไม่เช็ค • ยังไม่บันทึกจนกว่าจะกด “บันทึก”</div>
-      <div class="al-list" id="alList"></div></div>
-    <div class="modal-foot"><span class="al-sum" id="alSum" style="flex:1"></span><button class="btn" data-x>ยกเลิก</button><button class="btn primary" id="alSave">บันทึก</button></div>`, true);
-  md.el.querySelector('.modal-box').classList.add('xwide');
-  const changed=()=>Object.keys(val).filter(k=>val[k]!==orig[k]);
-  const sumG=g=>g.rows.reduce((a,r)=>a+(val[rk(r)]===''?0:Number(val[rk(r)])),0);
-  const ordG=g=>g.rows.reduce((a,r)=>a+r.qty,0);
-  const gState=g=>{ const any=g.rows.some(r=>val[rk(r)]!==''); if(!any) return ''; return g.rows.every(r=>val[rk(r)]!=='' && Number(val[rk(r)])>=r.qty) ? 'full' : 'short'; };
-  const updSum=()=>{
-    const ch=changed(), npo=new Set(ch.map(k=>k.split('|')[0])).size;
-    $('#alSum',md.el).textContent = ch.length ? 'แก้ '+ch.length+' ช่อง ใน '+npo+' P.O.' : 'ยังไม่มีการเปลี่ยนแปลง';
-    $('#alSave',md.el).textContent = ch.length ? '✓ บันทึก '+npo+' P.O.' : 'บันทึก'; $('#alSave',md.el).disabled=!ch.length;
-  };
-  const refreshCard=(gi)=>{
-    const g=groups[gi], card=$(`.al-prod[data-g="${gi}"]`,md.el); if(!card) return;
-    card.classList.remove('full','short'); const st=gState(g); if(st) card.classList.add(st);
-    $('.al-tot',card).textContent='พร้อมส่ง '+num(sumG(g))+' / สั่ง '+num(ordG(g));
-    g.rows.forEach((r,ri)=>{ const inp=$(`[data-r="${ri}"]`,card); const v=val[rk(r)];
-      if(document.activeElement!==inp) inp.value=v;
-      inp.classList.toggle('chg', v!==orig[rk(r)]); inp.classList.toggle('over', v!=='' && Number(v)>r.qty); });
-    updSum();
-  };
-  const draw=()=>{
-    const t=q.trim().toLowerCase();
-    const shown=groups.map((g,i)=>({g,i})).filter(({g})=>!t || [g.name,g.barcode,g.sku,g.brand].join(' ').toLowerCase().indexOf(t)>=0);
-    $('#alList',md.el).innerHTML = shown.length ? shown.map(({g,i})=>`<div class="al-prod ${gState(g)}" data-g="${i}">
-        <div class="al-head"><span class="nm">${h(g.name)}<small>${h(g.barcode||'-')}${g.sku?' • SKU '+h(g.sku):''}${g.brand?' • '+h(g.brand):''} • <span class="al-tot"></span></small></span>
-          <span class="have">มีของ <input class="al-in" type="number" inputmode="numeric" min="0" data-have placeholder="รวม"> <button class="btn sm" data-dist>กระจาย</button></span></div>
-        ${g.rows.map((r,ri)=>`<div class="al-row"><span class="po"><b>${h(r.po.customer)}</b> • ${h(r.po.po_no)}<small>ส่ง ${h(thDate(r.po.due_date,true))}${r.it.unit_note?' • '+h(r.it.unit_note):''}</small></span>
-          <span class="od">สั่ง ${num(r.qty)}</span><input class="al-in" type="number" inputmode="numeric" min="0" data-r="${ri}" placeholder="-"></div>`).join('')}
-      </div>`).join('') : '<div class="empty">ไม่พบสินค้าที่ค้นหา</div>';
-    shown.forEach(({g,i})=>{
-      const card=$(`.al-prod[data-g="${i}"]`,md.el);
-      $$('[data-r]',card).forEach(inp=>inp.oninput=()=>{ const r=g.rows[Number(inp.dataset.r)]; const v=inp.value.trim();
-        val[rk(r)] = v==='' ? '' : String(Math.max(0, Math.floor(Number(v)||0))); refreshCard(i); });
-      const have=$('[data-have]',card);
-      const dist=()=>{ const v=have.value.trim(); if(v===''){ have.focus(); return; } let left=Math.max(0, Math.floor(Number(v)||0));
-        g.rows.forEach(r=>{ const give=Math.min(r.qty, left); val[rk(r)]=String(give); left-=give; }); refreshCard(i);
-        if(left>0) toast('มีของเกินยอดสั่งรวม '+num(left)+' ชิ้น (ไม่ได้ใส่เพิ่ม)'); };
-      $('[data-dist]',card).onclick=dist; have.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); dist(); } };
-      refreshCard(i);
-    });
-    updSum();
-  };
-  $('#alQ',md.el).oninput=e=>{ q=e.target.value; draw(); };
-  $('#alFull',md.el).onclick=()=>{ groups.forEach(g=>g.rows.forEach(r=>{ if(val[rk(r)]==='') val[rk(r)]=String(r.qty); })); draw(); toast('ใส่เต็มจำนวนในช่องที่ยังว่างแล้ว'); };
-  $('#alXo',md.el).onclick=()=>exportAllocExcel(pos, groups, val, rk).catch(fail);
-  $('#alXi',md.el).onchange=e=>{ const f=e.target.files[0]; e.target.value=''; if(f) importAllocExcel(f, groups, val, rk).then(n=>{ if(n!=null){ draw(); toast('นำเข้าจาก Excel '+n+' ช่อง — ตรวจแล้วกด “บันทึก”'); } }).catch(fail); };
-  const close=async()=>{ if(changed().length && !await confirmBox('ปิดหน้านี้', 'ยังไม่ได้บันทึกจำนวนที่แก้ '+changed().length+' ช่อง — ปิดโดยไม่บันทึก?', 'ปิดไม่บันทึก', true)) return; md.close(); };
-  $('[data-x]',md.el).onclick=close;
-  $('#alSave',md.el).onclick=async()=>{
-    const ch=changed(); if(!ch.length) return;
-    const byPo={}; ch.forEach(k=>{ const [id,line]=k.split('|'); (byPo[id]=byPo[id]||[]).push({line, qty_ready:val[k]}); });
-    const btn=$('#alSave',md.el); btn.disabled=true;
-    const ids=Object.keys(byPo); let ok=0; const bad=[];
-    for(const id of ids){
-      const po=S.pos.find(p=>p.id===id); btn.textContent='กำลังบันทึก '+(ok+bad.length+1)+'/'+ids.length+'…';
-      try{ const items=await call('updateItems',{id, items:byPo[id]}); syncItems(id, items); ok++;
-        byPo[id].forEach(u=>{ orig[id+'|'+u.line]=u.qty_ready; }); }
-      catch(e){ bad.push((po?po.po_no:id)+': '+e.message); }
-    }
-    render();
-    if(bad.length){ toast('บันทึกได้ '+ok+'/'+ids.length+' P.O. — ไม่สำเร็จ: '+bad.join(', '), true); draw(); btn.disabled=false; return; }
-    md.close(); toast('บันทึกจำนวนพร้อมส่งแล้ว '+ok+' P.O.');
-  };
-  draw();
-  setTimeout(()=>{ const f=$('#alQ',md.el); if(f && !window.matchMedia('(max-width:640px)').matches) f.focus(); },50);
-}
+document.addEventListener('mousedown',e=>{ const m=$('#allocMenu'); if(m && !m.contains(e.target) && !e.target.closest('#btnAllocFab')) closeAllocMenu(); }, true);
+
 const ALLOC_HEAD=['รหัสระบบ','ลูกค้า','เลข P.O.','กำหนดส่ง','ลำดับ','บาร์โค้ด','SKU','แบรนด์','ชื่อสินค้า','จำนวนสั่ง','จำนวนพร้อมส่ง'];
-async function exportAllocExcel(pos, groups, val, rk){
+async function exportAllocPOs(pos){
+  if(!pos.length){ toast('ติ๊กเลือก P.O. ก่อน', true); return; }
   await loadScript(XLSX_SRC);
   const rows=[['Allocate สินค้าพร้อมส่ง • '+pos.length+' P.O. • '+S.today],
-    ['วิธีใช้: แก้เฉพาะคอลัมน์ "จำนวนพร้อมส่ง" (ช่องว่าง = ยังไม่เช็ค) แล้วกด ⬆ นำเข้า Excel ในหน้า Allocate • ห้ามแก้คอลัมน์ รหัสระบบ / เลข P.O. / ลำดับ'], ALLOC_HEAD];
-  groups.forEach(g=>{
-    g.rows.forEach(r=>{ const v=val[rk(r)];
-      rows.push([r.po.id, r.po.customer||'', r.po.po_no||'', r.po.due_date||'', Number(r.it.line), String(g.barcode||''), g.sku||'', g.brand||'', g.name||'', r.qty, v===''?'':Number(v)]); });
-    if(g.rows.length>1) rows.push(['','','','','','','','','รวม '+(g.name||''), g.rows.reduce((a,r)=>a+r.qty,0), '']);
+    ['วิธีใช้: แก้เฉพาะคอลัมน์ "จำนวนพร้อมส่ง" (ช่องว่าง = ยังไม่เช็ค) แล้วกดปุ่ม 📦 Allocate → ⬆ อัพ Excel • ห้ามแก้คอลัมน์ รหัสระบบ / เลข P.O. / ลำดับ'], ALLOC_HEAD];
+  pos.forEach(po=>{
+    itemsOf(po.id).slice().sort((a,b)=>Number(a.line)-Number(b.line)).forEach(it=>{
+      const m=matchItem(it), pr=MATCH_OK[m.status] ? m.product : null;
+      rows.push([po.id, po.customer||'', po.po_no||'', po.due_date||'', Number(it.line), String(it.barcode||(pr&&pr.barcodes[0])||''),
+        pr ? (pr.sku||'') : (it.jst_sku||''), it.brand||'', (pr&&pr.name)||it.name||'', Number(it.qty)||0,
+        it.qty_ready===''||it.qty_ready==null ? '' : Number(it.qty_ready)]);
+    });
   });
   const ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[{wch:4},{wch:16},{wch:16},{wch:11},{wch:6},{wch:16},{wch:14},{wch:12},{wch:46},{wch:10},{wch:15}];
+  ws['!cols']=[{wch:18},{wch:16},{wch:18},{wch:11},{wch:6},{wch:16},{wch:14},{wch:12},{wch:50},{wch:10},{wch:15}];
   ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:10}},{s:{r:1,c:0},e:{r:1,c:10}}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Allocate');
   await downloadWorkbook(wb, 'Allocate_'+S.today+'_'+pos.length+'PO.xlsx');
 }
-async function importAllocExcel(file, groups, val, rk){
+async function importAllocUpload(file){
   await loadScript(XLSX_SRC);
   const wb=XLSX.read(await file.arrayBuffer(), {type:'array'});
   const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:''});
   const hi=rows.findIndex(r=>r.some(c=>String(c).trim()==='จำนวนพร้อมส่ง'));
-  if(hi<0) throw new Error('ไม่พบคอลัมน์ "จำนวนพร้อมส่ง" — ใช้ไฟล์ที่ดาวน์โหลดจากปุ่ม ⬇ Excel ในหน้า Allocate');
+  if(hi<0) throw new Error('ไม่พบคอลัมน์ "จำนวนพร้อมส่ง" — ใช้ไฟล์ที่ดึงจากปุ่ม 📦 Allocate → ⬇ ดึง Excel');
   const head=rows[hi].map(c=>String(c).trim()), col=n=>head.indexOf(n);
   const iId=col('รหัสระบบ'), iPo=col('เลข P.O.'), iLine=col('ลำดับ'), iBc=col('บาร์โค้ด'), iV=col('จำนวนพร้อมส่ง');
-  const idx={}; groups.forEach(g=>g.rows.forEach(r=>{ idx[r.po.id+'|'+r.it.line]=r; idx['P:'+r.po.po_no+'|'+r.it.line]=r; }));
-  let n=0; const warn=[];
+  if(iLine<0 || (iId<0 && iPo<0)) throw new Error('ไม่พบคอลัมน์ รหัสระบบ / เลข P.O. / ลำดับ — ใช้ไฟล์ที่ดึงจากระบบ');
+  const byPo={}, warn=[];
   rows.slice(hi+1).forEach(row=>{
-    const line=iLine>=0 ? String(row[iLine]).trim() : ''; if(!line) return;
-    const r=(iId>=0 && idx[String(row[iId]).trim()+'|'+line]) || (iPo>=0 && idx['P:'+String(row[iPo]).trim()+'|'+line]);
-    if(!r){ warn.push((iPo>=0?row[iPo]:'')+' #'+line); return; }
-    if(iBc>=0 && String(row[iBc]).trim() && r.it.barcode && String(row[iBc]).trim()!==String(r.it.barcode)){ warn.push(r.po.po_no+' #'+line+' บาร์โค้ดไม่ตรง'); return; }
+    const line=String(row[iLine]).trim(); if(!line) return;
+    const id=iId>=0 ? String(row[iId]).trim() : '', pono=iPo>=0 ? String(row[iPo]).trim() : '';
+    const po=S.pos.find(p=>p.id===id && p.status!=='DELETED') || (pono && S.pos.find(p=>String(p.po_no)===pono && !['DELETED','SUPERSEDED','DUPLICATE'].includes(p.status)));
+    if(!po){ warn.push('ไม่พบ P.O. '+(pono||id)); return; }
+    if(['CANCELLED','DELETED','SUPERSEDED','DUPLICATE','SHIPPED'].includes(po.status)){ warn.push('P.O. '+po.po_no+' อยู่ในสถานะ “'+(ST_LABEL[po.status]||po.status)+'” — ข้าม'); return; }
+    const it=itemsOf(po.id).find(x=>String(x.line)===line);
+    if(!it){ warn.push('P.O. '+po.po_no+' ไม่มีลำดับ '+line); return; }
+    const bc=iBc>=0 ? String(row[iBc]).trim() : '';
+    if(bc && it.barcode && bc!==String(it.barcode)){ warn.push('P.O. '+po.po_no+' #'+line+' บาร์โค้ดไม่ตรงกับในระบบ — ข้าม'); return; }
     const raw=String(row[iV]).replace(/,/g,'').trim();
-    const v= raw==='' ? '' : String(Math.max(0, Math.floor(Number(raw)||0)));
-    if(raw!=='' && isNaN(Number(raw))){ warn.push(r.po.po_no+' #'+line+' จำนวนไม่ถูกต้อง'); return; }
-    if(val[rk(r)]!==v){ val[rk(r)]=v; n++; }
+    if(raw!=='' && (isNaN(Number(raw)) || Number(raw)<0)){ warn.push('P.O. '+po.po_no+' #'+line+' จำนวนไม่ถูกต้อง: '+raw); return; }
+    const v = raw==='' ? '' : String(Math.floor(Number(raw)));
+    const cur = it.qty_ready===''||it.qty_ready==null ? '' : String(Number(it.qty_ready));
+    if(v===cur) return;
+    if(v!=='' && Number(v)>Number(it.qty)) warn.push('P.O. '+po.po_no+' #'+line+' พร้อมส่ง '+num(v)+' มากกว่าจำนวนสั่ง '+num(it.qty));
+    (byPo[po.id]=byPo[po.id]||{po, ups:[], lines:[]});
+    byPo[po.id].ups.push({line:it.line, qty_ready:v});
+    byPo[po.id].lines.push('#'+h(it.line)+' '+h(String(it.name||'').slice(0,42))+': '+(cur===''?'ยังไม่เช็ค':num(cur))+' → <b>'+(v===''?'ยังไม่เช็ค':num(v))+'</b> / '+num(it.qty));
   });
-  if(warn.length) toast('ข้าม '+warn.length+' แถว: '+warn.slice(0,3).join(', ')+(warn.length>3?'…':''), true);
-  return n;
+  const groups=Object.values(byPo);
+  if(!groups.length){ toast(warn.length ? warn[0] : 'ไม่มีจำนวนที่เปลี่ยนจากในระบบ', !!warn.length); return; }
+  const total=groups.reduce((a,g)=>a+g.ups.length,0);
+  const md=openModal(`<div class="modal-head">⬆ อัพ Excel Allocate</div><div class="modal-body">
+      <div class="alert info">จะอัปเดตจำนวนพร้อมส่ง <b>${total}</b> รายการ ใน <b>${groups.length}</b> P.O. จากไฟล์ ${h(file.name)}</div>
+      ${warn.length?`<div class="alert warn">${warn.slice(0,12).map(h).join('<br>')}${warn.length>12?'<br>…และอีก '+(warn.length-12)+' รายการ':''}</div>`:''}
+      ${groups.map(g=>`<div class="am-po"><b>${h(g.po.customer)} • P.O. ${h(g.po.po_no)}</b> <span class="ref">${g.ups.length} รายการ</span>
+        <div class="am-lines">${g.lines.join('<br>')}</div></div>`).join('')}
+    </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>✓ อัปเดต ${groups.length} P.O.</button></div>`, true);
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=async()=>{
+    const btn=$('[data-ok]',md.el); btn.disabled=true; let ok=0; const bad=[];
+    for(const g of groups){
+      btn.textContent='กำลังบันทึก '+(ok+bad.length+1)+'/'+groups.length+'…';
+      try{ const items=await call('updateItems',{id:g.po.id, items:g.ups}); syncItems(g.po.id, items); ok++; }
+      catch(e){ bad.push(g.po.po_no+': '+e.message); }
+    }
+    md.close(); render();
+    if(bad.length) toast('อัปเดตได้ '+ok+'/'+groups.length+' P.O. — ไม่สำเร็จ: '+bad.join(', '), true);
+    else toast('อัปเดตจำนวนพร้อมส่งแล้ว '+ok+' P.O. ('+total+' รายการ)');
+  };
 }
 
 async function exportPickExcel(only){
