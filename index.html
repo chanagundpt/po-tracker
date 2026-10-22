@@ -1015,8 +1015,9 @@ function openUserForm(u){
 async function load(silent){
   try{
     const d = await call('list', {});
+    if(silent && PENDING) return;                       // ยังบันทึกไม่ครบ — รอรอบหน้า
     S.pos = d.pos; S.items = d.items; if(d.today) S.today=d.today; if(d.lists) S.lists=d.lists;
-    render();
+    if(silent) renderWhenIdle(render); else render();
     setTimeout(runScreening, 2500);
   }catch(e){ if(!silent) fail(e); }
 }
@@ -1614,12 +1615,31 @@ async function openDetail(id){
 }
 
 /* ---------- บันทึกเบื้องหลัง: หน้าจอเปลี่ยนทันที ข้อมูลส่งไปเซิร์ฟเวอร์ตามหลัง ---------- */
-let PENDING=0, SYNC_T=null;
+let PENDING=0, SYNC_T=null, SAVE_Q=Promise.resolve();
+/** บันทึกเบื้องหลังแบบเข้าคิว: ส่งทีละรายการตามลำดับที่ผู้ใช้กด (หน้าจออัปเดตทันทีอยู่แล้ว ไม่ต้องรอ) */
 function bgCall(fn, args, onOk, onFail){
   PENDING++; setSaving();
-  return call(fn, args).then(r=>{ if(onOk) onOk(r); return r; })
+  const run=()=>call(fn, args).then(r=>{ if(onOk) onOk(r); return r; })
     .catch(e=>{ fail(e); if(onFail) onFail(e); else refreshDetail().catch(()=>{}); })
     .finally(()=>{ PENDING--; setSaving(); scheduleSync(); });
+  const p=SAVE_Q.then(run, run);
+  SAVE_Q=p.catch(()=>{});
+  return p;
+}
+/** ผู้ใช้กำลังทำอะไรอยู่ไหม — ถ้าใช่ ห้ามวาดหน้าใหม่ (กันหน้าเด้ง/เคอร์เซอร์หลุด/เมนูปิดเอง) */
+function userBusy(){
+  const a=document.activeElement;
+  if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type!=='checkbox' && a.type!=='file') return true;
+  if($('.modal') || $('#allocMenu') || (typeof DD!=='undefined' && DD) || (SUG.box && SUG.box.style.display!=='none' && SUG.box.childElementCount)) return true;
+  const sel=window.getSelection && window.getSelection(); if(sel && String(sel).length) return true;
+  return false;
+}
+let DEFER_T=null;
+/** วาดหน้าใหม่เมื่อผู้ใช้ว่าง (ลองใหม่ทุก 1.5 วิ) */
+function renderWhenIdle(fn){
+  clearTimeout(DEFER_T);
+  const tick=()=>{ if(PENDING || userBusy()){ DEFER_T=setTimeout(tick, 1500); return; } fn(); };
+  tick();
 }
 function setSaving(){
   let el=$('#savingDot');
@@ -1670,15 +1690,22 @@ function syncItems(poId, items){
   S.items = S.items.filter(i=>i.po_id!==poId).concat(items);
   if(S.detail && S.detail.po.id===poId) S.detail.items=items;
 }
+function tlHtml(log){
+  return (log===null?'<div class="ref">กำลังโหลดประวัติ…</div>':'') + (log||[]).map(l=>`<div class="tl-item ${l.action==='NOTE'?'note':''}">
+    <div class="tl-ic">${LOG_ICON[l.action]||'•'}</div>
+    <div><div class="tl-meta">${h(l.user)} • ${h(thDateTime(l.ts))}</div><div class="tl-text">${linkify(l.detail)}</div></div></div>`).join('');
+}
 async function refreshDetail(){
   if(!S.detail) return;
   const id=S.detail.po.id;
   const d=await call('get',{id});
   if(!S.detail || S.detail.po.id!==id) return;
-  // อย่าทับช่องที่ผู้ใช้กำลังพิมพ์อยู่
-  const act=document.activeElement;
-  if(act && act.closest && act.closest('.overlay') && /INPUT|TEXTAREA/.test(act.tagName) && !PENDING){ S.detail=d; syncPo(d.po); syncItems(id,d.items); return; }
-  S.detail=d; syncPo(d.po); syncItems(id,d.items); renderDetail();
+  if(PENDING) return;                                   // ยังมีงานรอบันทึก — ข้อมูลจากเซิร์ฟเวอร์อาจยังไม่ล่าสุด
+  const sig=x=>JSON.stringify([x.po, (x.items||[]).map(i=>[i.line,i.barcode,i.name,i.brand,i.qty,i.qty_ready,i.item_note,i.jst_sku,i.unit_note])]);
+  const same = sig(S.detail)===sig(d);
+  S.detail=Object.assign({}, S.detail, {po:d.po, items:d.items, log:d.log}); syncPo(d.po); syncItems(id,d.items);
+  if(same){ const tl=$('.overlay .tl'); if(tl) tl.innerHTML=tlHtml(d.log); return; }   // ข้อมูลตรงกับหน้าจอแล้ว → อัปเดตแค่ประวัติ ไม่วาดใหม่
+  renderWhenIdle(()=>{ if(S.detail && S.detail.po.id===id) renderDetail(); });
 }
 
 function fieldHtml(po,k,label,type,cls,extra){
@@ -1798,9 +1825,7 @@ function renderDetail(){
       <div class="panel">
         <h3>บันทึก & ประวัติ</h3>
         <div class="note-box"><textarea id="noteIn" placeholder="พิมพ์บันทึก เช่น โทรนัดคลังลูกค้าแล้ว / สินค้า A ขาด รอของเข้า"></textarea><button class="btn primary" id="noteSend">บันทึก</button></div>
-        <div class="tl">${log===null?'<div class="ref">กำลังโหลดประวัติ…</div>':''}${(log||[]).map(l=>`<div class="tl-item ${l.action==='NOTE'?'note':''}">
-          <div class="tl-ic">${LOG_ICON[l.action]||'•'}</div>
-          <div><div class="tl-meta">${h(l.user)} • ${h(thDateTime(l.ts))}</div><div class="tl-text">${linkify(l.detail)}</div></div></div>`).join('')}</div>
+        <div class="tl">${tlHtml(log)}</div>
       </div>
     </div>
   </div></div>
