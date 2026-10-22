@@ -62,6 +62,32 @@ main{max-width:1100px;margin:0 auto;padding:14px 16px 80px}
 .kpi span{font-size:12.5px;color:var(--muted)}
 .kpi.on{outline:2px solid var(--accent)}
 .kpi.red b{color:var(--red)} .kpi.orange b{color:var(--orange)} .kpi.yellow b{color:var(--yellow)}
+.kpi.green b{color:var(--green)} .kpi.gray b{color:var(--muted)}
+body.view-blogger .fab{display:none}
+.bl-sync{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:10px}
+.bl-sync .t{flex:1;min-width:200px;font-size:13.5px;color:var(--muted)}
+.bl-sync .t b{color:var(--ink)}
+.bl-sync.err{border-color:var(--red);background:var(--red-soft)}
+.bl-sync.err .t{color:var(--red)}
+.bl-kpis{grid-template-columns:repeat(5,1fr)}
+@media (max-width:640px){ .bl-kpis{grid-template-columns:repeat(2,1fr)} .bl-kpis .kpi:first-child{grid-column:1/-1} }
+.bl-card{cursor:default}
+.bl-card.g-pending{border-left-color:var(--orange)} .bl-card.g-waitpick{border-left-color:var(--yellow)}
+.bl-card.g-picked{border-left-color:var(--green)} .bl-card.g-cancel{border-left-color:var(--line);opacity:.7}
+.bl-card .cust{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bl-st{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.bl-who{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14px;align-items:center}
+.bl-who a{color:var(--accent);text-decoration:none;font-weight:600}
+.bl-foot{display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+.bl-foot .trk{color:var(--ink);font-weight:600}
+.cpy{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:7px;padding:1px 7px;font-size:12px;cursor:pointer}
+.cpy:hover{border-color:var(--accent);color:var(--accent)}
+.bl-items summary{cursor:pointer;color:var(--accent);font-size:13px;list-style:none}
+.bl-items summary::-webkit-details-marker{display:none}
+.bl-items ol{margin:6px 0 0;padding-left:20px;font-size:13px;display:grid;gap:3px}
+.badge.green{background:var(--green-soft);color:var(--green)} .badge.yellow{background:var(--yellow-soft);color:var(--yellow)}
+.badge.orange{background:var(--orange-soft);color:var(--orange)} .badge.red{background:var(--red-soft);color:var(--red)}
+.bl-more{display:block;margin:12px auto;}
 @media (max-width:560px){.kpis{grid-template-columns:repeat(2,1fr)}}
 
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
@@ -345,6 +371,7 @@ html,body{overflow-x:hidden;max-width:100%}
   .filters input{flex:1 1 100%}
   .filters select,.filters .dd{flex:1 1 0;max-width:none}
   .filters #fSort{flex:1 1 100%}
+  .filters #blFile{flex:1 1 100%}
   .card{padding:12px}
   .card-foot{gap:4px 10px}
   .dup-banner{font-size:13.5px;padding:10px 12px}
@@ -520,6 +547,7 @@ body.view-summary .fab{display:none}
   <nav class="tabs">
     <button class="tab on" data-view="list">รายการ P.O.</button>
     <button class="tab" data-view="summary">สรุปสินค้าที่ต้องจัด</button>
+    <button class="tab" data-view="blogger">Blogger Tracker</button>
   </nav>
 </header>
 <main id="content"><div class="loading"><span class="spin"></span> กำลังโหลด…</div></main>
@@ -1051,12 +1079,117 @@ async function importNow(){
  * ========================================================= */
 function render(){
   document.body.classList.toggle('view-summary', S.view==='summary');
+  document.body.classList.toggle('view-blogger', S.view==='blogger');
   updateAllocFab();
+  if(S.view==='blogger'){ renderBlogger(); if(S.detail) renderDetail(); return; }
   if(S.view==='summary') renderSummary(); else renderList();
   if(S.detail) renderDetail();
 }
 
 const SORTS=[{value:'due',label:'เรียง: กำหนดส่งใกล้สุด'},{value:'new',label:'เรียง: เข้ามาล่าสุด'},{value:'customer',label:'เรียง: ลูกค้า'}];
+/* ---------- Blogger Tracker: ออเดอร์ร้าน Blogger จาก JST (อ่านอย่างเดียว) ----------
+   เซิร์ฟเวอร์ดึงจาก JST ทุก 10 นาที เก็บในชีต Blogger → หน้านี้อ่านจากชีตทุก 1 นาทีระหว่างเปิดแท็บ
+   ปุ่ม "ดึงจาก JST ตอนนี้" สั่งเซิร์ฟเวอร์ดึงทันที (เว้นอย่างน้อย 1 นาทีต่อครั้ง) */
+S.blog=null; S.bf={q:'', group:'all', file:'', range:'month', sort:'new', show:60};
+const BL_ST={WaitPay:'รอชำระเงิน', WaitConfirm:'ชำระแล้วรอตรวจสอบ', Question:'ผิดปกติ', Delivering:'กำลังจัดส่ง', WaitOuterDeliver:'รอตัวแทนจัดส่ง', Delivered:'จัดส่งแล้ว', Cancelled:'ยกเลิก'};
+const BL_LG={WaitedCollect:'รอขนส่งสแกนรับ', Collected:'ขนส่งรับแล้ว', Delivering:'กำลังนำส่ง', InTransit:'กำลังขนส่ง', Signed:'ผู้รับได้รับแล้ว', Delivered:'ส่งถึงผู้รับแล้ว', Returned:'ตีกลับ', Returning:'กำลังตีกลับ', Exception:'ขนส่งมีปัญหา'};
+const BL_GROUPS=[['all','ทั้งหมด',''],['pending','ยังไม่จัดส่ง','orange'],['waitpick','รอขนส่งรับ','yellow'],['picked','ขนส่งรับแล้ว','green'],['cancel','ยกเลิก','gray']];
+function blGroup(o){
+  if(o.status_code==='Cancelled') return 'cancel';
+  if(o.status_code!=='Delivered') return 'pending';
+  return (!o.logistics_code || o.logistics_code==='WaitedCollect') ? 'waitpick' : 'picked';
+}
+function blItems(o){ try{ return JSON.parse(o.items||'[]'); }catch(e){ return []; } }
+let BL_T=null, BL_BUSY=false;
+async function loadBlogger(silent, refresh){
+  if(BL_BUSY) return; BL_BUSY=true;
+  try{
+    const d=await call(refresh?'bloggerRefresh':'blogger', {});
+    S.blog=d;
+    if(S.view==='blogger'){ if(silent) renderWhenIdle(()=>{ if(S.view==='blogger') renderBlogger(); }); else renderBlogger(); }
+    if(refresh) toast(d.last && d.last.ok===false ? 'ดึงจาก JST ไม่สำเร็จ: '+d.last.error : 'อัปเดตจาก JST แล้ว • '+(d.rows||[]).length+' ออเดอร์', d.last && d.last.ok===false);
+  }catch(e){
+    if(!S.blog && S.view==='blogger') $('#content').innerHTML=`<div class="empty">โหลด Blogger Tracker ไม่ได้: ${h(e.message)}${/ไม่รู้จักคำสั่ง/.test(e.message)?'<br><br>ต้องอัปเดต Code.gs เป็นเวอร์ชัน 1.6.0 ก่อน (วางโค้ดใหม่แล้ว Deploy → New version)':''}</div>`;
+    else if(!silent) fail(e);
+  }
+  finally{ BL_BUSY=false; }
+  clearTimeout(BL_T);
+  BL_T=setTimeout(()=>{ if(S.view==='blogger' && document.visibilityState==='visible') loadBlogger(true); }, 60000);
+}
+function blRangeOk(o, r){
+  const d=String(o.order_time||'').slice(0,10); if(!d) return r==='all';
+  if(r==='today') return d===S.today;
+  if(r==='yesterday') return d===addDays(S.today,-1);
+  if(r==='7d') return d>addDays(S.today,-7);
+  if(r==='month') return d.slice(0,7)===S.today.slice(0,7);
+  return true;
+}
+const BL_RANGES=[{value:'today',label:'วันนี้'},{value:'yesterday',label:'เมื่อวาน'},{value:'7d',label:'7 วันล่าสุด'},{value:'month',label:'เดือนนี้'},{value:'all',label:'ทั้งหมดที่ดึงมา'}];
+const BL_SORTS=[{value:'new',label:'เรียง: สั่งล่าสุด'},{value:'old',label:'เรียง: สั่งก่อน'},{value:'file',label:'เรียง: ไฟล์ต้นทาง'}];
+function blSince(ms){
+  if(!ms) return '-';
+  const m=Math.round((Date.now()-ms)/60000);
+  const t=new Date(ms).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  return t+' น.'+(m<1?' (เมื่อสักครู่)':m<60?' ('+m+' นาทีที่แล้ว)':'');
+}
+function renderBlogger(){
+  const el=$('#content');
+  if(!S.blog){ el.innerHTML='<div class="empty"><span class="spin"></span> กำลังโหลด Blogger Tracker…</div>'; loadBlogger(); return; }
+  const f=S.bf, d=S.blog, rows=d.rows||[], last=d.last||{};
+  const inRange=rows.filter(o=>blRangeOk(o, f.range));
+  const fileRows=inRange.filter(o=>!f.file || o.buyer_message===f.file);
+  const cnt={all:fileRows.length, pending:0, waitpick:0, picked:0, cancel:0}; fileRows.forEach(o=>cnt[blGroup(o)]++);
+  const q=f.q.trim().toLowerCase().replace(/[\s-]/g,'');
+  let list=fileRows.filter(o=>(f.group==='all' || blGroup(o)===f.group) &&
+    (!q || [o.online_no,o.order_id,o.receiver,o.phone,o.buyer_message,o.tracking,o.carrier,blItems(o).map(i=>i.name+' '+i.sku).join(' ')].join(' ').toLowerCase().replace(/[\s-]/g,'').indexOf(q)>=0));
+  if(f.sort==='old') list.sort((a,b)=>String(a.order_time).localeCompare(String(b.order_time)));
+  else if(f.sort==='file') list.sort((a,b)=>String(a.buyer_message).localeCompare(String(b.buyer_message),'th') || String(b.order_time).localeCompare(String(a.order_time)));
+  else list.sort((a,b)=>String(b.order_time).localeCompare(String(a.order_time)));
+  const files={}; inRange.forEach(o=>{ const k=o.buyer_message||''; files[k]=(files[k]||0)+1; });
+  const syncTxt = last.ok===false
+    ? `⚠ ดึงจาก JST ไม่สำเร็จ: ${h(last.error||'')}${last.okAt?' • ข้อมูลที่เห็นเป็นของ '+h(blSince(last.okAt)):''}`
+    : last.at ? `อัปเดตจาก JST ล่าสุด <b>${h(blSince(last.at))}</b> • ${num(rows.length)} ออเดอร์ตั้งแต่ ${h(thDate(d.from,true))} • ${d.auto?'ดึงอัตโนมัติทุก 10 นาที':'ยังไม่ได้เปิดดึงอัตโนมัติ (เมนูในชีต)'}`
+    : 'ยังไม่เคยดึงข้อมูลจาก JST — ในชีตกดเมนู PO Tracker › Blogger Tracker: ตั้งบัญชี JST แล้วกด “ดึงจาก JST ตอนนี้”';
+  const shown=list.slice(0, f.show);
+  el.innerHTML=`
+    <div class="bl-sync ${last.ok===false?'err':''}"><span class="t">${syncTxt}</span><button class="btn sm primary" id="blRefresh">⟳ ดึงจาก JST ตอนนี้</button></div>
+    <div class="kpis bl-kpis">${BL_GROUPS.map(([k,l,c])=>`<button class="kpi ${c} ${f.group===k?'on':''}" data-blg="${k}"><b>${num(cnt[k])}</b><span>${l}</span></button>`).join('')}</div>
+    <div class="filters">
+      <input id="blQ" type="search" placeholder="🔎 ค้นหา เลขออเดอร์ / ชื่อผู้รับ / เบอร์ / เลขพัสดุ / สินค้า" value="${h(f.q)}">
+      ${ddHtml('blFile', f.file||'ไฟล์ต้นทางทั้งหมด', !!f.file)}
+      ${ddHtml('blRange', (BL_RANGES.find(x=>x.value===f.range)||BL_RANGES[3]).label, f.range!=='month')}
+      ${ddHtml('blSort', (BL_SORTS.find(x=>x.value===f.sort)||BL_SORTS[0]).label, false)}
+    </div>
+    <div class="list">${shown.length ? shown.map(blCard).join('') : `<div class="empty">${rows.length?'ไม่มีออเดอร์ตามเงื่อนไขนี้':'ยังไม่มีข้อมูล'}</div>`}</div>
+    ${list.length>shown.length?`<button class="btn bl-more" id="blMore">แสดงเพิ่ม (${num(list.length-shown.length)} ออเดอร์)</button>`:''}`;
+  $('#blRefresh').onclick=async e=>{ const b=e.currentTarget; b.disabled=true; b.textContent='⏳ กำลังดึงจาก JST…'; await loadBlogger(false, true); };
+  $$('[data-blg]').forEach(b=>b.onclick=()=>{ f.group=b.dataset.blg; f.show=60; renderBlogger(); });
+  const qi=$('#blQ'); qi.oninput=()=>{ f.q=qi.value; clearTimeout(qi._t); qi._t=setTimeout(()=>{ f.show=60; renderBlogger(); const n=$('#blQ'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
+  $('#blFile').onclick=e=>ddToggle(e.currentTarget,{title:'ไฟล์ต้นทาง (ข้อความของผู้ซื้อ)', cur:f.file,
+    opts:[{value:'',label:'ไฟล์ต้นทางทั้งหมด'}].concat(Object.keys(files).sort((a,b)=>b.localeCompare(a,'th')).map(k=>({value:k, label:k||'(ไม่มีข้อความ)', n:files[k]+' ออเดอร์'}))),
+    onPick:v=>{ f.file=v; f.show=60; renderBlogger(); }});
+  $('#blRange').onclick=e=>ddToggle(e.currentTarget,{title:'ช่วงเวลาสั่งซื้อ', opts:BL_RANGES, cur:f.range, search:false, onPick:v=>{ f.range=v; f.file=''; f.show=60; renderBlogger(); }});
+  $('#blSort').onclick=e=>ddToggle(e.currentTarget,{title:'เรียงลำดับ', opts:BL_SORTS, cur:f.sort, search:false, onPick:v=>{ f.sort=v; renderBlogger(); }});
+  const more=$('#blMore'); if(more) more.onclick=()=>{ f.show+=100; renderBlogger(); };
+  $$('[data-cpy]').forEach(b=>b.onclick=()=>{ const v=b.dataset.cpy; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(()=>toast('คัดลอก '+v+' แล้ว')).catch(()=>toast(v)); });
+}
+function blCard(o){
+  const g=blGroup(o), its=blItems(o);
+  const stCls={pending:'orange', waitpick:'yellow', picked:'green', cancel:'cancel'}[g];
+  const lg = o.status_code==='Cancelled' ? '' : (BL_LG[o.logistics_code] || o.logistics || '');
+  return `<div class="card bl-card g-${g}">
+    <div class="card-top">
+      <div class="card-title"><div class="cust">${h(o.online_no||'-')} ${o.online_no?`<button class="cpy" data-cpy="${h(o.online_no)}" title="คัดลอก">คัดลอก</button>`:''}</div>
+        <div class="pono">JST ${h(o.order_id)} • สั่ง ${h(thDateTime(o.order_time))}${o.send_time?' • ส่งออก '+h(thDateTime(o.send_time)):''}</div></div>
+      <div class="bl-st"><span class="badge ${stCls}">${h(BL_ST[o.status_code]||o.status||o.status_code)}</span>${lg?`<span class="badge ${g==='picked'?'green':'yellow'}">${h(lg)}</span>`:''}</div>
+    </div>
+    ${o.buyer_message?`<div class="tags"><span class="tag">📄 ไฟล์ต้นทาง: ${h(o.buyer_message)}</span></div>`:''}
+    <div class="bl-who"><span>👤 ${h(o.receiver||'-')}</span>${o.phone?`<a href="tel:${h(o.phone.replace(/[^\d+]/g,''))}">📞 ${h(o.phone)}</a>`:''}</div>
+    <div class="bl-foot">${o.carrier?`<span>🚚 ${h(o.carrier)}</span>`:''}${o.tracking?`<span class="trk">${h(o.tracking)}</span><button class="cpy" data-cpy="${h(o.tracking)}">คัดลอก</button>`:''}
+      ${its.length?`<details class="bl-items"><summary>📦 ${its.length} รายการ • ${num(o.qty)} ชิ้น ▾</summary><ol>${its.map(i=>`<li>${h(i.name)} <b>×${num(i.qty)}</b></li>`).join('')}</ol></details>`:''}</div>
+  </div>`;
+}
+
 function filteredPos(){
   const f=S.filter, t=S.today, w=addDays(t,warnDays());
   const q=f.q.trim().toLowerCase();
@@ -1380,7 +1513,7 @@ function allocSelected(){
 }
 function updateAllocFab(){
   const b=$('#btnAllocFab'); if(!b) return;
-  const show = S.view!=='summary' && S.pos.some(p=>p.status==='CHECKING');
+  const show = S.view==='list' && S.pos.some(p=>p.status==='CHECKING');
   b.hidden=!show;
   Object.keys(S.allocSel).forEach(id=>{ const p=S.pos.find(x=>x.id===id); if(!p || p.status!=='CHECKING') delete S.allocSel[id]; });
   const n=Object.keys(S.allocSel).length;
