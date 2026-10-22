@@ -1196,6 +1196,13 @@ function pickCellPrint(r){
   if(r.ready===0) return '<b class="zero">0</b><div class="ref zero">ไม่มีสินค้า</div>';
   return '<b>'+num(r.ready)+'</b>';
 }
+/** หมายเหตุของสินค้าในใบรวม: ใบเดียว = ข้อความ, หลายใบ = "ลูกค้า: ข้อความ" */
+function pickNotes(g, esc){
+  const ns=g.per.filter(x=>String(x.note||'').trim());
+  if(!ns.length) return '';
+  if(g.per.length===1) return esc(ns[0].note);
+  return ns.map(x=>esc(x.po.customer)+': '+esc(x.note)).join('<br>');
+}
 const sumQty=(rows,k)=>rows.reduce((a,r)=>a+(Number(r[k])||0),0);
 function pickAggregate(pos){
   const map={}, out=[];
@@ -1203,7 +1210,7 @@ function pickAggregate(pos){
     const key=r.sku || r.barcode || r.name;
     let g=map[key];
     if(!g){ g=map[key]={barcode:r.barcode, sku:r.sku, name:r.name, brand:r.brand, qty:0, pick:0, unchecked:0, per:[]}; out.push(g); }
-    g.qty+=r.qty; g.pick+=r.pick; if(r.ready===null) g.unchecked++; g.per.push({po, qty:r.pick, ordered:r.qty});
+    g.qty+=r.qty; g.pick+=r.pick; if(r.ready===null) g.unchecked++; g.per.push({po, qty:r.pick, ordered:r.qty, note:r.note});
   }));
   return out.sort((a,b)=>String(a.brand).localeCompare(String(b.brand)) || String(a.name).localeCompare(String(b.name)));
 }
@@ -1393,23 +1400,30 @@ function openAllocMenu(){
 }
 document.addEventListener('mousedown',e=>{ const m=$('#allocMenu'); if(m && !m.contains(e.target) && !e.target.closest('#btnAllocFab')) closeAllocMenu(); }, true);
 
-const ALLOC_HEAD=['รหัสระบบ','ลูกค้า','เลข P.O.','กำหนดส่ง','ลำดับ','บาร์โค้ด','SKU','แบรนด์','ชื่อสินค้า','จำนวนสั่ง','จำนวนพร้อมส่ง'];
+const ALLOC_NOTE='หมายเหตุ/วันหมดอายุ';
+const ALLOC_HEAD=['รหัสระบบ','ลูกค้า','เลข P.O.','กำหนดส่ง','ลำดับ','บาร์โค้ด','SKU','แบรนด์','ชื่อสินค้า','จำนวนสั่ง','จำนวนพร้อมส่ง',ALLOC_NOTE];
+/** ค่าจาก Excel เป็นข้อความ (วันที่ที่ Excel แปลงเป็นตัวเลข → DD/MM/YYYY) */
+function excelText(v){
+  if(v instanceof Date) return ('0'+v.getDate()).slice(-2)+'/'+('0'+(v.getMonth()+1)).slice(-2)+'/'+v.getFullYear();
+  if(typeof v==='number' && v>20000 && v<80000 && Math.floor(v)===v){ const d=new Date(Math.round((v-25569)*864e5)); return ('0'+d.getUTCDate()).slice(-2)+'/'+('0'+(d.getUTCMonth()+1)).slice(-2)+'/'+d.getUTCFullYear(); }
+  return String(v==null?'':v).trim();
+}
 async function exportAllocPOs(pos){
   if(!pos.length){ toast('ติ๊กเลือก P.O. ก่อน', true); return; }
   await loadScript(XLSX_SRC);
   const rows=[['Allocate สินค้าพร้อมส่ง • '+pos.length+' P.O. • '+S.today],
-    ['วิธีใช้: แก้เฉพาะคอลัมน์ "จำนวนพร้อมส่ง" (ช่องว่าง = ยังไม่เช็ค) แล้วกดปุ่ม 📦 Allocate → ⬆ อัพ Excel • ห้ามแก้คอลัมน์ รหัสระบบ / เลข P.O. / ลำดับ'], ALLOC_HEAD];
+    ['วิธีใช้: แก้เฉพาะคอลัมน์ "จำนวนพร้อมส่ง" (ช่องว่าง = ยังไม่เช็ค) และ "'+ALLOC_NOTE+'" (เช่น EXP 10/2027 — จะแสดงในใบจัดสินค้า) แล้วกดปุ่ม 📦 Allocate → ⬆ อัพ Excel • ห้ามแก้คอลัมน์ รหัสระบบ / เลข P.O. / ลำดับ'], ALLOC_HEAD];
   pos.forEach(po=>{
     itemsOf(po.id).slice().sort((a,b)=>Number(a.line)-Number(b.line)).forEach(it=>{
       const m=matchItem(it), pr=MATCH_OK[m.status] ? m.product : null;
       rows.push([po.id, po.customer||'', po.po_no||'', po.due_date||'', Number(it.line), String(it.barcode||(pr&&pr.barcodes[0])||''),
         pr ? (pr.sku||'') : (it.jst_sku||''), it.brand||'', (pr&&pr.name)||it.name||'', Number(it.qty)||0,
-        it.qty_ready===''||it.qty_ready==null ? '' : Number(it.qty_ready)]);
+        it.qty_ready===''||it.qty_ready==null ? '' : Number(it.qty_ready), it.item_note||'']);
     });
   });
   const ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[{wch:18},{wch:16},{wch:18},{wch:11},{wch:6},{wch:16},{wch:14},{wch:12},{wch:50},{wch:10},{wch:15}];
-  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:10}},{s:{r:1,c:0},e:{r:1,c:10}}];
+  ws['!cols']=[{wch:18},{wch:16},{wch:18},{wch:11},{wch:6},{wch:16},{wch:14},{wch:12},{wch:50},{wch:10},{wch:15},{wch:28}];
+  ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:11}},{s:{r:1,c:0},e:{r:1,c:11}}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Allocate');
   await downloadWorkbook(wb, 'Allocate_'+S.today+'_'+pos.length+'PO.xlsx');
 }
@@ -1421,6 +1435,7 @@ async function importAllocUpload(file){
   if(hi<0) throw new Error('ไม่พบคอลัมน์ "จำนวนพร้อมส่ง" — ใช้ไฟล์ที่ดึงจากปุ่ม 📦 Allocate → ⬇ ดึง Excel');
   const head=rows[hi].map(c=>String(c).trim()), col=n=>head.indexOf(n);
   const iId=col('รหัสระบบ'), iPo=col('เลข P.O.'), iLine=col('ลำดับ'), iBc=col('บาร์โค้ด'), iV=col('จำนวนพร้อมส่ง');
+  const iN=head.findIndex(c=>c===ALLOC_NOTE || c==='หมายเหตุ' || /วันหมดอายุ|exp/i.test(c));
   if(iLine<0 || (iId<0 && iPo<0)) throw new Error('ไม่พบคอลัมน์ รหัสระบบ / เลข P.O. / ลำดับ — ใช้ไฟล์ที่ดึงจากระบบ');
   const byPo={}, warn=[];
   rows.slice(hi+1).forEach(row=>{
@@ -1437,17 +1452,23 @@ async function importAllocUpload(file){
     if(raw!=='' && (isNaN(Number(raw)) || Number(raw)<0)){ warn.push('P.O. '+po.po_no+' #'+line+' จำนวนไม่ถูกต้อง: '+raw); return; }
     const v = raw==='' ? '' : String(Math.floor(Number(raw)));
     const cur = it.qty_ready===''||it.qty_ready==null ? '' : String(Number(it.qty_ready));
-    if(v===cur) return;
-    if(v!=='' && Number(v)>Number(it.qty)) warn.push('P.O. '+po.po_no+' #'+line+' พร้อมส่ง '+num(v)+' มากกว่าจำนวนสั่ง '+num(it.qty));
+    const nv = iN>=0 ? excelText(row[iN]) : null, nc=String(it.item_note||'').trim();
+    const u={line:it.line}, msg=[];
+    if(v!==cur){
+      u.qty_ready=v; msg.push('พร้อมส่ง '+(cur===''?'ยังไม่เช็ค':num(cur))+' → <b>'+(v===''?'ยังไม่เช็ค':num(v))+'</b> / '+num(it.qty));
+      if(v!=='' && Number(v)>Number(it.qty)) warn.push('P.O. '+po.po_no+' #'+line+' พร้อมส่ง '+num(v)+' มากกว่าจำนวนสั่ง '+num(it.qty));
+    }
+    if(nv!==null && nv!==nc){ u.item_note=nv; msg.push('หมายเหตุ: '+(nv?'<b>'+h(nv)+'</b>':'(ลบ)')); }
+    if(!msg.length) return;
     (byPo[po.id]=byPo[po.id]||{po, ups:[], lines:[]});
-    byPo[po.id].ups.push({line:it.line, qty_ready:v});
-    byPo[po.id].lines.push('#'+h(it.line)+' '+h(String(it.name||'').slice(0,42))+': '+(cur===''?'ยังไม่เช็ค':num(cur))+' → <b>'+(v===''?'ยังไม่เช็ค':num(v))+'</b> / '+num(it.qty));
+    byPo[po.id].ups.push(u);
+    byPo[po.id].lines.push('#'+h(it.line)+' '+h(String(it.name||'').slice(0,42))+': '+msg.join(' • '));
   });
   const groups=Object.values(byPo);
-  if(!groups.length){ toast(warn.length ? warn[0] : 'ไม่มีจำนวนที่เปลี่ยนจากในระบบ', !!warn.length); return; }
+  if(!groups.length){ toast(warn.length ? warn[0] : 'ไม่มีจำนวนหรือหมายเหตุที่เปลี่ยนจากในระบบ', !!warn.length); return; }
   const total=groups.reduce((a,g)=>a+g.ups.length,0);
   const md=openModal(`<div class="modal-head">⬆ อัพ Excel Allocate</div><div class="modal-body">
-      <div class="alert info">จะอัปเดตจำนวนพร้อมส่ง <b>${total}</b> รายการ ใน <b>${groups.length}</b> P.O. จากไฟล์ ${h(file.name)}</div>
+      <div class="alert info">จะอัปเดตจำนวนพร้อมส่ง/หมายเหตุ <b>${total}</b> รายการ ใน <b>${groups.length}</b> P.O. จากไฟล์ ${h(file.name)}</div>
       ${warn.length?`<div class="alert warn">${warn.slice(0,12).map(h).join('<br>')}${warn.length>12?'<br>…และอีก '+(warn.length-12)+' รายการ':''}</div>`:''}
       ${groups.map(g=>`<div class="am-po"><b>${h(g.po.customer)} • P.O. ${h(g.po.po_no)}</b> <span class="ref">${g.ups.length} รายการ</span>
         <div class="am-lines">${g.lines.join('<br>')}</div></div>`).join('')}
@@ -1472,13 +1493,13 @@ async function exportPickExcel(only){
   try{
     await loadScript(XLSX_SRC);
     const wb=XLSX.utils.book_new();
-    const a=[['ลำดับ','บาร์โค้ด','SKU','ชื่อสินค้า','แบรนด์','จำนวนหยิบ','แยกตาม P.O.','หยิบแล้ว ✓']]
-      .concat(d.agg.map((g,i)=>[i+1,g.barcode,g.sku,g.name,g.brand,g.pick,g.per.map(x=>x.po.customer+' '+x.po.po_no+': '+x.qty).join(' | '),'']))
-      .concat([['','','','รวม','',sumQty(d.agg,'pick'),'','']]);
+    const a=[['ลำดับ','บาร์โค้ด','SKU','ชื่อสินค้า','แบรนด์','จำนวนหยิบ','แยกตาม P.O.','หมายเหตุ','หยิบแล้ว ✓']]
+      .concat(d.agg.map((g,i)=>[i+1,g.barcode,g.sku,g.name,g.brand,g.pick,g.per.map(x=>x.po.customer+' '+x.po.po_no+': '+x.qty).join(' | '),pickNotes(g, x=>String(x)).replace(/<br>/g,' | '),'']))
+      .concat([['','','','รวม','',sumQty(d.agg,'pick'),'','','']]);
     const b=[['ลูกค้า','เลข P.O.','กำหนดส่ง','สถานะ','บาร์โค้ด','SKU','ชื่อสินค้า','จำนวนสั่ง','จัดส่งได้','สถานะเช็ค','หน่วยตาม P.O.','หมายเหตุ']];
     d.pos.forEach(po=>pickRows(po).forEach(r=>b.push([po.customer,po.po_no,po.due_date,ST_LABEL[po.status],r.barcode,r.sku,r.name,r.qty,r.pick,
       r.ready===null?'ยังไม่เช็ค':r.ready===0?'ไม่มีสินค้า':r.ready<r.qty?'ขาด '+(r.qty-r.ready):'ครบ', r.unit,r.note])));
-    const w1=XLSX.utils.aoa_to_sheet(a); w1['!cols']=[{wch:6},{wch:16},{wch:16},{wch:48},{wch:12},{wch:12},{wch:50},{wch:10}];
+    const w1=XLSX.utils.aoa_to_sheet(a); w1['!cols']=[{wch:6},{wch:16},{wch:16},{wch:48},{wch:12},{wch:12},{wch:50},{wch:28},{wch:10}];
     const w2=XLSX.utils.aoa_to_sheet(b); w2['!cols']=[{wch:18},{wch:18},{wch:12},{wch:16},{wch:16},{wch:16},{wch:48},{wch:11},{wch:11},{wch:12},{wch:14},{wch:24}];
     XLSX.utils.book_append_sheet(wb,w1,'รวมหยิบ'); XLSX.utils.book_append_sheet(wb,w2,'แยกตาม P.O.');
     const name='ใบจัดสินค้า_'+S.today+'.xlsx';
@@ -1501,10 +1522,10 @@ function printPickList(only){
   const head=`<div style="display:flex;align-items:center;gap:12px">${logo?`<img src="${logo}" style="height:34px" alt="2NK">`:''}<h1>ใบจัดสินค้า (Picking List)</h1></div><div class="sub">พิมพ์เมื่อ ${now.toLocaleString('th-TH')} • โดย ${esc(S.user)} • ${d.pos.length} P.O.</div>
     <table><tr><th>ลูกค้า</th><th>เลข P.O.</th><th>กำหนดส่ง</th><th>นัดส่ง</th><th>ส่งที่</th></tr>
     ${d.pos.map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(p.po_no)}</td><td>${esc(thDate(p.due_date,true))}</td><td>${esc(p.appointment||'')}</td><td>${esc(p.ship_to||'')}</td></tr>`).join('')}</table>`;
-  const sum=`<h2>รวมจำนวนหยิบ</h2><table><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th><th>แยกตาม P.O.</th><th class="ck">หยิบ</th></tr>
+  const sum=`<h2>รวมจำนวนหยิบ</h2><table><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th><th>แยกตาม P.O.</th><th>หมายเหตุ</th><th class="ck">หยิบ</th></tr>
     ${d.agg.map((g,i)=>`<tr><td>${i+1}</td><td>${esc(g.barcode)}</td><td>${esc(g.sku)}</td><td class="nm">${esc(g.name)}</td><td><b class="${g.pick===0?'zero':''}">${num(g.pick)}</b>${g.unchecked?'<div class="ref">ยังไม่เช็ค</div>':''}</td>
-      <td>${g.per.map(x=>esc(x.po.customer)+' '+num(x.qty)).join(', ')}</td><td class="ck">☐</td></tr>`).join('')}
-    <tr class="tot"><td colspan="4">รวมทั้งหมด ${d.agg.length} รายการ</td><td>${num(sumQty(d.agg,'pick'))}</td><td colspan="2"></td></tr></table>`;
+      <td>${g.per.map(x=>esc(x.po.customer)+' '+num(x.qty)).join(', ')}</td><td>${pickNotes(g, esc)}</td><td class="ck">☐</td></tr>`).join('')}
+    <tr class="tot"><td colspan="4">รวมทั้งหมด ${d.agg.length} รายการ</td><td>${num(sumQty(d.agg,'pick'))}</td><td colspan="3"></td></tr></table>`;
   const per=`<h2>แยกตาม P.O.</h2>`+d.pos.map(po=>`<div class="po"><b>${esc(po.customer)} • P.O. ${esc(po.po_no)}</b> — กำหนดส่ง ${esc(thDate(po.due_date,true))}
     <table><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th><th>หมายเหตุ</th><th class="ck">✓</th></tr>
     ${pickRows(po).map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}</td><td>${pickCellPrint(r)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('')}
