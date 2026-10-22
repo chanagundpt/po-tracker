@@ -94,8 +94,15 @@ main{max-width:1100px;margin:0 auto;padding:14px 16px 80px}
 .tag{font-size:12px;border-radius:6px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);font-weight:500}
 .tag.warn{background:var(--orange-soft);color:var(--orange)}
 .tag.red{background:var(--red-soft);color:var(--red);font-weight:600}
-.tags .tag.end{margin-left:auto}
-.tags .end-wrap{margin-left:auto;display:contents}
+.tags-end{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.tags-end:empty{display:none}
+.tag.ok{background:rgba(52,211,153,.15);color:#34d399;font-weight:600}
+.doc-toggle{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:9px 12px;border-radius:10px;font-weight:600;font-size:14.5px;
+  border:1px solid var(--red);background:var(--red-soft);color:var(--red);cursor:pointer}
+.doc-toggle .box{width:22px;height:22px;flex:none;border-radius:6px;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:14px}
+.doc-toggle.ok{border-color:#34d399;background:rgba(52,211,153,.12);color:#34d399}
+.doc-toggle.ok .box{background:#34d399;color:#0d1f18}
+.chip.green.on{background:#34d399;border-color:#34d399;color:#0d1f18}
 .jst-multi .jst-sum{font-weight:400;margin-left:6px}
 .jst-rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
 .jst-row{display:grid;gap:4px;border:1px solid var(--red);background:var(--red-soft);border-radius:10px;padding:8px}
@@ -531,7 +538,23 @@ function jstTagHtml(po){
   if(!noJstCut(po)) return '';
   const j=jstInfo(po);
   const txt = j.multi ? `⚠ ยังไม่ได้ตัด Stock JST: ${j.missing.join(', ')} (${j.done}/${j.total})` : '⚠ ยังไม่ได้ตัด Stock JST';
-  return `<span class="tag red end" title="${h(j.multi?'ตัดแล้ว '+j.done+' จาก '+j.total+' แบรนด์':'ยังไม่ได้ใส่เลขออเดอร์ JST')}">${h(txt)}</span>`;
+  return `<span class="tag red" title="${h(j.multi?'ตัดแล้ว '+j.done+' จาก '+j.total+' แบรนด์':'ยังไม่ได้ใส่เลขออเดอร์ JST')}">${h(txt)}</span>`;
+}
+/* ---------- สถานะเอกสาร: ติ๊กอย่างเดียว (doc_status = '' | 'จัดทำแล้ว') ---------- */
+const DOC_DONE='จัดทำแล้ว';
+function docTracked(po){ return !['CANCELLED','DELETED','SUPERSEDED','DUPLICATE'].includes(po.status); }
+function docDone(po){ return String(po.doc_status||'').trim()!==''; }
+function noDoc(po){ return docTracked(po) && !docDone(po); }
+function docTagHtml(po){
+  if(!docTracked(po)) return '';
+  return docDone(po) ? '<span class="tag ok">✓ จัดทำเอกสารแล้ว</span>' : '<span class="tag red">⚠ ยังไม่ได้จัดทำเอกสาร</span>';
+}
+/** ป้ายชิดขวา (เอกสาร + JST) */
+function endTagsHtml(po){ return docTagHtml(po)+jstTagHtml(po); }
+function docFieldHtml(po){
+  const done=docDone(po);
+  return `<div class="f"><label>เอกสาร</label><button type="button" class="doc-toggle ${done?'ok':''}" id="docToggle" aria-pressed="${done}">
+    <span class="box">${done?'✓':''}</span><span class="lb">${done?'จัดทำเอกสารแล้ว':'ยังไม่ได้จัดทำเอกสาร'}</span></button></div>`;
 }
 function jstFieldHtml(po){
   const j=jstInfo(po);
@@ -932,7 +955,8 @@ function filteredPos(){
     if(f.status==='OPEN' && isClosed(po)) return false;
     if(f.status==='ALL' && po.status==='DELETED') return false;
     if(f.status==='NOJST' && !noJstCut(po)) return false;
-    if(!['OPEN','ALL','NOJST'].includes(f.status) && po.status!==f.status) return false;
+    if(f.status==='NODOC' && !noDoc(po)) return false;
+    if(!['OPEN','ALL','NOJST','NODOC'].includes(f.status) && po.status!==f.status) return false;
     if(f.customer && po.customer!==f.customer) return false;
     if(f.due){
       if(isClosed(po)) return false;
@@ -977,7 +1001,7 @@ function renderList(){
     </div>
     ${cnt('DUPLICATE') && f.status!=='DUPLICATE' ? `<button class="dup-banner" id="dupBanner">🟣 มี P.O. เลขซ้ำรอตรวจ ${cnt('DUPLICATE')} ใบ — แตะเพื่อตรวจว่าเป็นการอัปเดตหรือไม่</button>`:''}
     <div class="chips">
-      ${[['OPEN','ยังไม่ส่ง',k.open],['NOJST','⚠ ยังไม่ได้ตัด Stock JST',S.pos.filter(noJstCut).length,'red']].concat(STATUSES.map(s=>[s.key,(ST_IDX[s.key]+1)+'. '+s.label,cnt(s.key)]))
+      ${[['OPEN','ยังไม่ส่ง',k.open],['NOJST','⚠ ยังไม่ได้ตัด Stock JST',S.pos.filter(noJstCut).length,'red'],['NODOC','⚠ ยังไม่ได้จัดทำเอกสาร',S.pos.filter(noDoc).length,'red']].concat(STATUSES.map(s=>[s.key,(ST_IDX[s.key]+1)+'. '+s.label,cnt(s.key)]))
         .concat([['DUPLICATE','🟣 เลขซ้ำ',cnt('DUPLICATE')],['SUPERSEDED','ใบเก่า',cnt('SUPERSEDED')],['CANCELLED','ยกเลิก',cnt('CANCELLED')],
           ['DELETED','🗑 ถูกลบ',cnt('DELETED')],['ALL','ทั้งหมด',S.pos.filter(p=>p.status!=='DELETED').length]])
         .map(([key,lbl,n,cls])=>`<button class="chip ${cls||''} ${f.status===key?'on':''}" data-st="${key}">${h(lbl)}<span class="n">${n}</span></button>`).join('')}
@@ -1025,7 +1049,7 @@ function cardHtml(po){
       ${po.warnings?'<span class="tag warn">⚠ ตรวจข้อมูล</span>':''}
       ${s.out+s.partial?`<span class="tag warn">ขาด ${s.out+s.partial} รายการ</span>`:''}
       ${po.appointment?`<span class="tag">🗓 นัดส่ง ${h(thDateTime(po.appointment.replace('T',' ')))}</span>`:''}
-      ${jstTagHtml(po)}
+      <span class="tags-end">${endTagsHtml(po)}</span>
     </div>
     <div class="mini-steps">${STATUSES.map((x,i)=>`<i class="${i<=idx?'on':''}"></i>`).join('')}</div>
     <div class="card-foot">
@@ -1444,7 +1468,7 @@ function renderDetail(){
         <div class="pono">P.O. ${h(po.po_no)} ${po.seller?'• '+h(po.seller):''}</div>
         <div class="tags" style="margin-top:6px"><span class="badge ${d.cls}">${h(d.text)}</span>
           ${String(po.brands||'').split(',').filter(x=>x.trim()).map(b=>`<span class="tag">${h(b.trim())}</span>`).join('')}
-          <span id="jstTag" class="end-wrap">${jstTagHtml(po)}</span></div>
+          <span id="jstTag" class="tags-end">${endTagsHtml(po)}</span></div>
       </div>
       ${po.file_url?`<a class="iconbtn" href="${h(po.file_url)}" target="_blank" rel="noopener" title="เปิดไฟล์ P.O.">${ICONS.pdf}<span class="hide-sm">PDF</span></a>`:''}
       ${po.email_link?`<a class="iconbtn" href="${h(po.email_link)}" target="_blank" rel="noopener" title="เปิดเมลต้นทาง">${ICONS.mail}</a>`:''}
@@ -1485,6 +1509,7 @@ function renderDetail(){
           ${fieldHtml(po,'due_date','กำหนดส่ง (เดดไลน์)','date','key')}
           ${fieldHtml(po,'appointment','นัดส่งสินค้า (วัน-เวลา)','datetime-local')}
           ${fieldHtml(po,'assignee','ผู้รับผิดชอบ','text','','placeholder="ชื่อผู้รับผิดชอบ"')}
+          ${docFieldHtml(po)}
           ${jstFieldHtml(po)}
           ${fieldHtml(po,'note','หมายเหตุ / รายละเอียดเพิ่มเติม','textarea','full','placeholder="เช่น ลูกค้าขอแยกกล่อง, รอสินค้าเข้าวันที่..."')}
         </div>
@@ -1547,6 +1572,11 @@ function renderDetail(){
   $('#dClose').onclick=closeDetail;
   $$('[data-go]').forEach(b=>b.onclick=()=>changeStatus(b.dataset.go));
   $$('[data-f]').forEach(inp=>inp.onchange=()=>saveField(inp.dataset.f, inp.value));
+  const dt=$('#docToggle'); if(dt) dt.onclick=()=>{
+    const po=S.detail.po, v=docDone(po)?'':DOC_DONE;
+    saveField('doc_status', v).then(r=>{ if(r && String(r.doc_status||'')!==v){ toast('บันทึกสถานะเอกสารไม่ได้ — กรุณาอัปเดต Code.gs เป็นเวอร์ชัน 1.5.0', true); updateDocUi(); } });
+    updateDocUi();
+  };
   $$('[data-jst]').forEach(inp=>inp.onchange=()=>{
     const j=jstInfo(S.detail.po); const r=j.rows[Number(inp.dataset.jst)]; if(!r) return;
     r.no=inp.value.trim();
@@ -1616,9 +1646,15 @@ function itemHtml(it){
 }
 
 /** อัปเดตป้าย/สถานะช่อง JST โดยไม่วาดหน้าใหม่ (ไม่ให้เคอร์เซอร์หลุดตอนกรอกหลายช่อง) */
+function updateDocUi(){
+  const po=S.detail && S.detail.po; if(!po) return;
+  const b=$('#docToggle'); if(b){ const done=docDone(po); b.classList.toggle('ok',done); b.setAttribute('aria-pressed',done);
+    $('.box',b).textContent=done?'✓':''; $('.lb',b).textContent=done?'จัดทำเอกสารแล้ว':'ยังไม่ได้จัดทำเอกสาร'; }
+  const t=$('#jstTag'); if(t) t.innerHTML=endTagsHtml(po);
+}
 function updateJstUi(){
   const po=S.detail && S.detail.po; if(!po) return;
-  const t=$('#jstTag'); if(t) t.innerHTML=jstTagHtml(po);
+  const t=$('#jstTag'); if(t) t.innerHTML=endTagsHtml(po);
   const j=jstInfo(po);
   $$('.jst-row').forEach((row,i)=>{ const r=j.rows[i]; if(!r) return; row.classList.toggle('ok', !!r.no); $('.jb',row).textContent=(r.no?'✓ ':'⚠ ')+r.brand; });
   const sm=$('.jst-sum b'); if(sm) sm.textContent=j.done+'/'+j.total;
