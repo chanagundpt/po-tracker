@@ -75,6 +75,26 @@ main{max-width:1100px;margin:0 auto;padding:14px 16px 80px}
 .filters input,.filters select{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 10px;min-width:0}
 .filters input{flex:1 1 220px}
 .filters select{flex:1 1 150px;max-width:240px}
+.dd{flex:1 1 170px;max-width:260px;display:flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 10px;min-width:0;text-align:left;color:var(--ink);font-size:14px}
+.dd .v{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd .ar{color:var(--muted);font-size:11px}
+.dd.set{border-color:var(--accent);color:var(--accent)}
+.dd:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+.ddp{position:fixed;z-index:90;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 36px rgba(0,0,0,.4);display:flex;flex-direction:column;overflow:hidden}
+.ddp .ddp-t{display:none;padding:12px 14px 0;font-weight:700}
+.ddp .q{margin:8px;border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:8px 10px;font-size:16px;color:var(--ink)}
+.ddp .q:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.ddp .ls{overflow:auto;overscroll-behavior:contain;padding:4px 5px 6px;flex:1;min-height:0}
+.ddp .ls button{display:flex;gap:8px;align-items:center;width:100%;text-align:left;border:0;background:none;border-radius:8px;padding:10px;font-size:14.5px;color:var(--ink);min-height:40px}
+.ddp .ls button .ck{width:16px;flex:none;color:var(--accent);font-weight:700}
+.ddp .ls button .tx{flex:1;min-width:0;word-break:break-word}
+.ddp .ls button .n{color:var(--muted);font-size:12.5px;flex:none}
+.ddp .ls button.on,.ddp .ls button:hover{background:var(--accent-soft)}
+.ddp .ls button.cur{font-weight:600;color:var(--accent)}
+.ddp .none{padding:14px;color:var(--muted);text-align:center}
+.ddp-back{position:fixed;inset:0;z-index:89;background:rgba(0,0,0,.45)}
+@media (max-width:640px){ .ddp{left:10px!important;right:10px;width:auto!important;top:calc(12px + env(safe-area-inset-top))!important;bottom:auto!important;max-height:62vh!important;border-radius:16px}
+  .ddp .ddp-t{display:block} }
 
 /* PO cards */
 .list{display:grid;gap:10px}
@@ -321,7 +341,7 @@ html,body{overflow-x:hidden;max-width:100%}
   .kpi{padding:10px}
   .kpi b{font-size:22px}
   .filters input{flex:1 1 100%}
-  .filters select{flex:1 1 0;max-width:none}
+  .filters select,.filters .dd{flex:1 1 0;max-width:none}
   .card{padding:12px}
   .card-foot{gap:4px 10px}
   .dup-banner{font-size:13.5px;padding:10px 12px}
@@ -948,6 +968,7 @@ function render(){
   if(S.detail) renderDetail();
 }
 
+const SORTS=[{value:'due',label:'เรียง: กำหนดส่งใกล้สุด'},{value:'new',label:'เรียง: เข้ามาล่าสุด'},{value:'customer',label:'เรียง: ลูกค้า'}];
 function filteredPos(){
   const f=S.filter, t=S.today, w=addDays(t,warnDays());
   const q=f.q.trim().toLowerCase();
@@ -1008,12 +1029,8 @@ function renderList(){
     </div>
     <div class="filters">
       <input id="q" type="search" placeholder="🔎 ค้นหา เลข P.O. / ลูกค้า / บาร์โค้ด / ชื่อสินค้า" value="${h(f.q)}">
-      <select id="fCust"><option value="">ลูกค้าทั้งหมด</option>${customers.map(c=>`<option ${c===f.customer?'selected':''}>${h(c)}</option>`).join('')}</select>
-      <select id="fSort">
-        <option value="due" ${f.sort==='due'?'selected':''}>เรียง: กำหนดส่งใกล้สุด</option>
-        <option value="new" ${f.sort==='new'?'selected':''}>เรียง: เข้ามาล่าสุด</option>
-        <option value="customer" ${f.sort==='customer'?'selected':''}>เรียง: ลูกค้า</option>
-      </select>
+      ${ddHtml('fCust', f.customer||'ลูกค้าทั้งหมด', !!f.customer)}
+      ${ddHtml('fSort', (SORTS.find(x=>x.value===f.sort)||SORTS[0]).label, false)}
     </div>
     <div class="list">${list.length ? list.map(cardHtml).join('') :
       `<div class="empty">ไม่มี P.O. ตามเงื่อนไขนี้${S.pos.length?'':'<br><br>กด “＋ เพิ่ม P.O.” เพื่ออัปโหลด PDF หรือกด 📧 เพื่อดึงจากเมล'}</div>`}</div>`;
@@ -1021,8 +1038,8 @@ function renderList(){
   $$('.kpi').forEach(b=>b.onclick=()=>{ f.due=b.dataset.due; if(f.due||f.status!=='ALL') f.status='OPEN'; renderList(); });
   $$('.chip').forEach(b=>b.onclick=()=>{ f.status=b.dataset.st; f.due=''; renderList(); });
   const q=$('#q'); q.oninput=()=>{ f.q=q.value; clearTimeout(q._t); q._t=setTimeout(()=>{ renderList(); const n=$('#q'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
-  $('#fCust').onchange=e=>{ f.customer=e.target.value; renderList(); };
-  $('#fSort').onchange=e=>{ f.sort=e.target.value; renderList(); };
+  $('#fCust').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกลูกค้า', opts:customerOpts('ลูกค้าทั้งหมด'), cur:f.customer, onPick:v=>{ f.customer=v; renderList(); }});
+  $('#fSort').onclick=e=>ddToggle(e.currentTarget,{title:'เรียงลำดับ', opts:SORTS, cur:f.sort, search:false, onPick:v=>{ f.sort=v; renderList(); }});
   $$('.card').forEach(c=>c.onclick=()=>openDetail(c.dataset.id));
   $$('.card [data-del]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); deletePo(b.closest('.card').dataset.id); });
   $$('.card [data-restore]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); restorePo(b.closest('.card').dataset.id); });
@@ -1125,7 +1142,7 @@ function renderSummary(){
   const agg=pickAggregate(sel);
   $('#content').innerHTML = `
     <div class="filters">
-      <select id="fCust2" style="flex:1 1 200px;max-width:none"><option value="">ทุกลูกค้า</option>${customers.map(c=>`<option ${c===S.filter.customer?'selected':''}>${h(c)}</option>`).join('')}</select>
+      ${ddHtml('fCust2', S.filter.customer||'ทุกลูกค้า', !!S.filter.customer, 'flex:1 1 200px;max-width:none')}
       <div class="seg" style="flex:1 1 260px"><button data-mode="po" class="${mode==='po'?'on':''}">แยกตาม P.O.</button><button data-mode="sum" class="${mode==='sum'?'on':''}">รวมจำนวนหยิบ (${sel.length} ใบ)</button></div>
     </div>
     ${mode==='po' ? (pos.length ? pos.map(poBlock).join('') : '<div class="empty">ไม่มี P.O. ที่ต้องจัด</div>')
@@ -1141,7 +1158,7 @@ function renderSummary(){
       <button class="btn sm" id="pkXls">⬇ Excel</button>
       <button class="btn sm primary" id="pkPrint">🖨 พิมพ์ / PDF</button>
     </div>`;
-  $('#fCust2').onchange=e=>{ S.filter.customer=e.target.value; renderSummary(); };
+  $('#fCust2').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกลูกค้า', opts:customerOpts('ทุกลูกค้า', S.pos.filter(p=>!isClosed(p))), cur:S.filter.customer, onPick:v=>{ S.filter.customer=v; renderSummary(); }});
   $$('[data-mode]').forEach(b=>b.onclick=()=>{ S.pickMode=b.dataset.mode; renderSummary(); });
   $$('[data-sel]').forEach(c=>c.onchange=()=>{ if(c.checked) S.pickSel[c.dataset.sel]=true; else delete S.pickSel[c.dataset.sel]; renderSummary(); });
   $$('[data-openpo]').forEach(b=>b.onclick=e=>{ e.preventDefault(); openDetail(b.dataset.openpo); });
@@ -2425,6 +2442,61 @@ function showSuggest(inp){
   }
   renderSuggest(inp, opts.map(o=>Object.assign({on: k==='brand' && o.label.toLowerCase()===q.toLowerCase()}, o)));
 }
+/* ---------- ดรอปดาวน์แบบค้นหาได้ (ใช้แทน <select> ที่รายการยาว) ----------
+   opts: [{value, label, n}] • มือถือแสดงเป็นแผ่นล่างจอ • พิมพ์ค้นหา / ลูกศร / Enter / Esc */
+function ddHtml(id, label, isSet, style){
+  return `<button type="button" class="dd ${isSet?'set':''}" id="${id}" aria-haspopup="listbox" ${style?`style="${style}"`:''}><span class="v">${h(label)}</span><span class="ar">▼</span></button>`;
+}
+let DD=null;
+const ddMobile=()=>window.matchMedia('(max-width:640px)').matches;
+function closeDd(){ if(!DD) return; DD.pop.remove(); DD.back.remove(); DD=null; }
+function openDd(btn, {title, opts, cur, onPick, search}){
+  closeDd();
+  const useSearch = search!==false && opts.length>6;
+  const back=document.createElement('div'); back.className='ddp-back';
+  const pop=document.createElement('div'); pop.className='ddp'; pop.setAttribute('role','listbox');
+  pop.innerHTML=`<div class="ddp-t">${h(title||'')}</div>${useSearch?'<input class="q" type="search" placeholder="🔎 พิมพ์ค้นหา" autocomplete="off">':''}<div class="ls"></div>`;
+  const mobile=ddMobile();
+  if(mobile) document.body.appendChild(back);
+  document.body.appendChild(pop);
+  if(!mobile){
+    const r=btn.getBoundingClientRect(), w=Math.min(Math.max(r.width, 260), innerWidth-16);
+    pop.style.width=w+'px'; pop.style.left=Math.max(8, Math.min(r.left, innerWidth-w-8))+'px';
+    const below=innerHeight-r.bottom-12, above=r.top-12;
+    if(below<260 && above>below){ pop.style.bottom=(innerHeight-r.top+4)+'px'; pop.style.maxHeight=Math.min(420, above)+'px'; }
+    else { pop.style.top=(r.bottom+4)+'px'; pop.style.maxHeight=Math.min(420, Math.max(200, below))+'px'; }
+  }
+  const q=$('.q',pop), ls=$('.ls',pop); let shown=[], hi=-1;
+  const norm=x=>String(x||'').toLowerCase().replace(/\s+/g,'');
+  const draw=()=>{
+    const t=q ? norm(q.value) : '';
+    shown=opts.filter(o=>!t || o.value==='' || norm(o.label).indexOf(t)>=0); hi=-1;
+    ls.innerHTML = shown.length ? shown.map((o,i)=>`<button type="button" role="option" data-i="${i}" class="${o.value===cur?'cur':''}"><span class="ck">${o.value===cur?'✓':''}</span><span class="tx">${h(o.label)}</span>${o.n!=null?`<span class="n">${h(o.n)}</span>`:''}</button>`).join('')
+      : '<div class="none">ไม่พบรายการที่ค้นหา</div>';
+    $$('button',ls).forEach(b=>b.onclick=()=>{ const o=shown[Number(b.dataset.i)]; closeDd(); onPick(o.value); });
+  };
+  const move=d=>{ const bs=$$('button',ls); if(!bs.length) return; hi=(hi+d+bs.length)%bs.length; bs.forEach((b,i)=>b.classList.toggle('on',i===hi)); bs[hi].scrollIntoView({block:'nearest'}); };
+  const key=e=>{ if(e.key==='ArrowDown'){e.preventDefault();move(1);} else if(e.key==='ArrowUp'){e.preventDefault();move(-1);}
+    else if(e.key==='Enter'){ e.preventDefault(); const b=$$('button',ls)[hi<0?(q&&q.value.trim()&&shown.length>1?1:0):hi]; if(b) b.click(); }
+    else if(e.key==='Escape'){ closeDd(); btn.focus(); } };
+  if(q){ q.oninput=draw; q.onkeydown=key; } else { pop.tabIndex=-1; pop.onkeydown=key; }
+  draw();
+  const c=$('.cur',ls); if(c) c.scrollIntoView({block:'nearest'});
+  if(q && !mobile) setTimeout(()=>q.focus(),30); else if(!q) setTimeout(()=>pop.focus(),30);
+  DD={pop, back, btn};
+  back.onclick=closeDd;
+}
+function ddToggle(btn, cfg){ if(DD && DD.btn===btn){ closeDd(); return; } openDd(btn, cfg); }
+document.addEventListener('mousedown',e=>{ if(DD && !DD.pop.contains(e.target) && !DD.btn.contains(e.target) && !DD.back.contains(e.target)) closeDd(); }, true);
+window.addEventListener('resize',()=>{ if(DD && !ddMobile()) closeDd(); });
+window.addEventListener('scroll',e=>{ if(DD && !DD.pop.contains(e.target) && !ddMobile()) closeDd(); }, true);
+/** ลูกค้าทั้งหมด = รายชื่อในหน้า ⚙ + ลูกค้าที่มีใน P.O. พร้อมจำนวนใบ */
+function customerOpts(allLabel, pos){
+  const cnt={}; (pos||S.pos).forEach(p=>{ if(p.status!=='DELETED' && p.customer) cnt[p.customer]=(cnt[p.customer]||0)+1; });
+  const names=[...new Set((S.lists.customers||[]).concat(Object.keys(cnt)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
+  return [{value:'', label:allLabel}].concat(names.map(n=>({value:n, label:n, n:(cnt[n]||0)+' ใบ'})));
+}
+
 function renderSuggest(inp, opts){
   if(!opts.length){ hideSuggest(); return; }
   if(!SUG.box){
