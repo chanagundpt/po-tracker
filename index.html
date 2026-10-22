@@ -114,6 +114,8 @@ main{max-width:1100px;margin:0 auto;padding:14px 16px 80px}
 .tag{font-size:12px;border-radius:6px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);font-weight:500}
 .tag.warn{background:var(--orange-soft);color:var(--orange)}
 .tag.red{background:var(--red-soft);color:var(--red);font-weight:600}
+.pill-notpo{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
+.panel.review.notpo{border-color:var(--red);background:var(--red-soft)}
 .tags-end{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
 .tags-end:empty{display:none}
 .tag.ok{background:rgba(52,211,153,.15);color:#34d399;font-weight:600}
@@ -560,6 +562,67 @@ function jstTagHtml(po){
   const txt = j.multi ? `⚠ ยังไม่ได้ตัด Stock JST: ${j.missing.join(', ')} (${j.done}/${j.total})` : '⚠ ยังไม่ได้ตัด Stock JST';
   return `<span class="tag red" title="${h(j.multi?'ตัดแล้ว '+j.done+' จาก '+j.total+' แบรนด์':'ยังไม่ได้ใส่เลขออเดอร์ JST')}">${h(txt)}</span>`;
 }
+/* ---------- คัดกรองไฟล์ที่ไม่ใช่ใบ P.O. ----------
+   เมลบางฉบับแนบเอกสารอื่นมาด้วย (เช่น ข้อมูลสาขา/เวลารับสินค้า ของ Donki) โหมดฟรีฝั่งเซิร์ฟเวอร์อ่าน PDF ไม่ได้
+   → หน้าเว็บอ่านข้อความใน PDF แล้วตัดสิน (ช่อง screen: po / not_po / unknown / confirmed)
+   - ใบ P.O. ทุกเจ้าที่มีตัวอย่าง มีคำว่า ใบสั่งซื้อ / Purchase Order / PO No / Order No หรือบาร์โค้ด EAN-13
+   - PDF ที่เป็นรูปสแกน (ไม่มีข้อความ) ตัดสินไม่ได้ → unknown ไม่เตือน
+   - ไม่ใช่ P.O. + เมลเดียวกันมีใบ P.O. จริง → ย้ายไป "ถูกลบ" อัตโนมัติ (กู้คืนได้) / ไม่มีใบคู่ → ติดป้ายให้คนตรวจ */
+const SCREEN_DONE=new Set(); let SCREEN_BUSY=false;
+function screenText(raw){
+  const t=normThai(String(raw||''));
+  if(t.replace(/\s/g,'').length<40) return {result:'unknown', why:'ไม่มีข้อความในไฟล์ (อาจเป็นรูปสแกน)'};
+  const kw=t.match(/purchase\s*order|ใบสั่งซื้อ|สั่งซื้อ|ใบสั่งของ|p\s*\.?\s*o\s*\.?\s*(?:no|number|#|เลขที่)|order\s*(?:no|number|date)|เลขที่ใบสั่ง/i);
+  const ean=(t.match(/(?:^|[^\d])(\d{13})(?=[^\d]|$)/g)||[]).map(x=>x.replace(/\D/g,'')).filter(validEan13).length;
+  if(kw || ean) return {result:'po', why:kw?'พบคำว่า '+kw[0]:'พบบาร์โค้ด '+ean+' รายการ'};
+  return {result:'not_po', why:'ไม่พบคำว่า ใบสั่งซื้อ / Purchase Order / เลข P.O. และไม่มีบาร์โค้ดสินค้า'};
+}
+async function screenPdf(po){
+  const [r, lib] = await Promise.all([call('getPdf',{id:po.id}), pdfLib()]);
+  const bin=atob(r.b64), bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  const doc=await lib.getDocument({data:bytes}).promise;
+  let txt='';
+  try{ for(let i=1;i<=Math.min(doc.numPages,5);i++){ const tc=await (await doc.getPage(i)).getTextContent(); txt+=tc.items.map(x=>x.str).join(' ')+'\n'; } }
+  finally{ try{ doc.destroy(); }catch(e){} }
+  return screenText(txt);
+}
+function screenSibling(po){
+  return S.pos.find(o=>o.id!==po.id && po.email_link && o.email_link===po.email_link && !['DELETED','SUPERSEDED'].includes(o.status)
+    && o.screen!=='not_po' && (o.screen==='po' || o.screen==='confirmed' || itemsOf(o.id).length));
+}
+async function runScreening(){
+  if(SCREEN_BUSY || !S.user || MODE==='none') return;
+  const todo=S.pos.filter(p=>p.file_url && !p.screen && !SCREEN_DONE.has(p.id) && !['DELETED','SUPERSEDED','CANCELLED','SHIPPED'].includes(p.status)).slice(0,15);
+  if(!todo.length) return;
+  SCREEN_BUSY=true;
+  let moved=0, flagged=0;
+  try{
+    for(const po of todo){
+      SCREEN_DONE.add(po.id);
+      let res; try{ res=await screenPdf(po); }catch(e){ console.warn('screen', po.po_no, e); continue; }
+      const cur=S.pos.find(p=>p.id===po.id); if(!cur || cur.screen) continue;
+      try{
+        if(res.result==='not_po' && screenSibling(cur)){
+          let r=await call('updatePO',{id:cur.id, fields:{screen:'not_po'}}); syncPo(Object.assign({}, cur, r, {screen:'not_po'}));
+          r=await call('deletePO',{id:cur.id, reason:'ระบบคัดกรอง: ไฟล์แนบนี้ไม่ใช่ใบ P.O. ('+res.why+') — เมลเดียวกันมีใบ P.O. แล้ว'});
+          syncPo(Object.assign({}, r, {screen:'not_po'})); moved++;
+        } else {
+          const r=await call('updatePO',{id:cur.id, fields:{screen:res.result}});
+          syncPo(Object.assign({}, cur, r, {screen:res.result}));
+          if(res.result==='not_po') flagged++;
+        }
+      }catch(e){ console.warn('screen save', e); }
+    }
+  } finally { SCREEN_BUSY=false; }
+  if(moved || flagged){
+    if(S.detail) renderDetail(); else render();
+    toast([moved?'ย้ายไฟล์แนบที่ไม่ใช่ P.O. ไป “ถูกลบ” '+moved+' ใบ':'', flagged?'พบเอกสารที่อาจไม่ใช่ P.O. '+flagged+' ใบ — กรุณาตรวจ':''].filter(Boolean).join(' • '));
+  }
+  if(todo.length===15) setTimeout(runScreening, 1500);
+}
+function maybeNotPo(po){ return po.screen==='not_po' && !['DELETED','SUPERSEDED'].includes(po.status); }
+
 /* ---------- สถานะเอกสาร: ติ๊กอย่างเดียว (doc_status = '' | 'จัดทำแล้ว') ---------- */
 const DOC_DONE='จัดทำแล้ว';
 function docTracked(po){ return !['CANCELLED','DELETED','SUPERSEDED','DUPLICATE'].includes(po.status); }
@@ -934,6 +997,7 @@ async function load(silent){
     const d = await call('list', {});
     S.pos = d.pos; S.items = d.items; if(d.today) S.today=d.today; if(d.lists) S.lists=d.lists;
     render();
+    setTimeout(runScreening, 2500);
   }catch(e){ if(!silent) fail(e); }
 }
 
@@ -977,7 +1041,8 @@ function filteredPos(){
     if(f.status==='ALL' && po.status==='DELETED') return false;
     if(f.status==='NOJST' && !noJstCut(po)) return false;
     if(f.status==='NODOC' && !noDoc(po)) return false;
-    if(!['OPEN','ALL','NOJST','NODOC'].includes(f.status) && po.status!==f.status) return false;
+    if(f.status==='NOTPO' && !maybeNotPo(po)) return false;
+    if(!['OPEN','ALL','NOJST','NODOC','NOTPO'].includes(f.status) && po.status!==f.status) return false;
     if(f.customer && po.customer!==f.customer) return false;
     if(f.due){
       if(isClosed(po)) return false;
@@ -1022,7 +1087,7 @@ function renderList(){
     </div>
     ${cnt('DUPLICATE') && f.status!=='DUPLICATE' ? `<button class="dup-banner" id="dupBanner">🟣 มี P.O. เลขซ้ำรอตรวจ ${cnt('DUPLICATE')} ใบ — แตะเพื่อตรวจว่าเป็นการอัปเดตหรือไม่</button>`:''}
     <div class="chips">
-      ${[['OPEN','ยังไม่ส่ง',k.open],['NOJST','⚠ ยังไม่ได้ตัด Stock JST',S.pos.filter(noJstCut).length,'red'],['NODOC','⚠ ยังไม่ได้จัดทำเอกสาร',S.pos.filter(noDoc).length,'red']].concat(STATUSES.map(s=>[s.key,(ST_IDX[s.key]+1)+'. '+s.label,cnt(s.key)]))
+      ${[['OPEN','ยังไม่ส่ง',k.open],['NOJST','⚠ ยังไม่ได้ตัด Stock JST',S.pos.filter(noJstCut).length,'red'],['NODOC','⚠ ยังไม่ได้จัดทำเอกสาร',S.pos.filter(noDoc).length,'red']].concat(S.pos.some(maybeNotPo)||f.status==='NOTPO'?[['NOTPO','⚠ อาจไม่ใช่ P.O.',S.pos.filter(maybeNotPo).length,'red']]:[]).concat(STATUSES.map(s=>[s.key,(ST_IDX[s.key]+1)+'. '+s.label,cnt(s.key)]))
         .concat([['DUPLICATE','🟣 เลขซ้ำ',cnt('DUPLICATE')],['SUPERSEDED','ใบเก่า',cnt('SUPERSEDED')],['CANCELLED','ยกเลิก',cnt('CANCELLED')],
           ['DELETED','🗑 ถูกลบ',cnt('DELETED')],['ALL','ทั้งหมด',S.pos.filter(p=>p.status!=='DELETED').length]])
         .map(([key,lbl,n,cls])=>`<button class="chip ${cls||''} ${f.status===key?'on':''}" data-st="${key}">${h(lbl)}<span class="n">${n}</span></button>`).join('')}
@@ -1062,6 +1127,7 @@ function cardHtml(po){
       ${po.status==='SUPERSEDED'?'<span class="pill pill-old">ใบเก่า • ถูกอัปเดตแล้ว</span>':''}
       ${po.replaces && po.status!=='SUPERSEDED' && po.status!=='DELETED'?'<span class="pill pill-new">🔗 อัปเดตจากใบเดิม</span>':''}
       ${po.status==='DELETED'?`<span class="pill pill-del">ลบโดย ${h(po.deleted_by||'-')} ${h(thDateTime(po.deleted_at))}</span>`:''}
+      ${maybeNotPo(po)?'<span class="pill pill-notpo">⚠ อาจไม่ใช่ใบ P.O. • รอตรวจ</span>':''}
       ${String(po.brands||'').split(',').filter(x=>x.trim()).map(b=>`<span class="tag">${h(b.trim())}</span>`).join('')}
       ${po.warnings?'<span class="tag warn">⚠ ตรวจข้อมูล</span>':''}
       ${s.out+s.partial?`<span class="tag warn">ขาด ${s.out+s.partial} รายการ</span>`:''}
@@ -1611,6 +1677,7 @@ function renderDetail(){
   $$('[data-resolve]',ov2).forEach(b=>b.onclick=()=>resolveDup(b.dataset.resolve));
   $$('[data-restore]',ov2).forEach(b=>b.onclick=()=>restorePo(po.id));
   $$('[data-delpo]',ov2).forEach(b=>b.onclick=()=>deletePo(po.id));
+  $$('[data-screenok]',ov2).forEach(b=>b.onclick=()=>{ saveField('screen','confirmed'); renderDetail(); toast('ยืนยันว่าเป็นใบ P.O. แล้ว'); });
   $$('[data-pickpo]',ov2).forEach(b=>b.onclick=()=>openPoPick(po));
   const pt=$('#pdfToggle'); if(pt) pt.onclick=e=>{ if(e.target.closest('#pdfFull')) return; store.set('po.pdfHidden', pdfHidden()?'0':'1'); renderDetail(); };
   $$('[data-pick]').forEach(b=>b.onclick=()=>pickForPo(b.dataset.pick));
@@ -2354,6 +2421,9 @@ function reviewPanel(po){
       ${po.replaced_by?`<button class="btn sm primary" data-open="${h(po.replaced_by)}">เปิดใบใหม่ →</button>`:''}<button class="btn sm danger" data-delpo>🗑 ลบ</button></div></div>`;
   if(po.status==='DELETED') return `<div class="panel review del"><div class="row"><span class="t">🗑 P.O. นี้ถูกลบโดย <b>${h(po.deleted_by||'-')}</b> เมื่อ ${h(thDateTime(po.deleted_at))}</span>
       <button class="btn sm primary" data-restore>↺ กู้คืน</button></div></div>`;
+  if(maybeNotPo(po)) return `<div class="panel review notpo"><h3>⚠ ไฟล์นี้อาจไม่ใช่ใบ P.O.</h3>
+      <div class="ref">ระบบอ่านไฟล์แล้วไม่พบคำว่า “ใบสั่งซื้อ / Purchase Order / เลข P.O.” และไม่มีบาร์โค้ดสินค้า (เช่น เป็นเอกสารข้อมูลสาขาที่แนบมากับเมล) — ดูไฟล์ด้านล่างแล้วเลือก</div>
+      <div class="step-actions" style="margin-top:10px"><button class="btn danger" data-delpo>🗑 ไม่ใช่ P.O. — ลบออก</button><button class="btn" data-screenok>✓ เป็นใบ P.O. จริง</button></div></div>`;
   if(po.replaces) return `<div class="panel review new"><div class="row"><span class="t">🔗 <b>อัปเดตจาก P.O. เดิม</b> — ใบนี้ใช้แทนใบเก่าแล้ว</span>
       <button class="btn sm" data-open="${h(po.replaces)}">เปิดใบเดิม</button></div></div>`;
   return '';
