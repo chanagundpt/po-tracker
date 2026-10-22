@@ -344,6 +344,7 @@ html,body{overflow-x:hidden;max-width:100%}
   .kpi b{font-size:22px}
   .filters input{flex:1 1 100%}
   .filters select,.filters .dd{flex:1 1 0;max-width:none}
+  .filters #fSort{flex:1 1 100%}
   .card{padding:12px}
   .card-foot{gap:4px 10px}
   .dup-banner{font-size:13.5px;padding:10px 12px}
@@ -701,7 +702,7 @@ const S = {
   token: store.get('po.token') || sessGet('po.token') || '',
   boot: null, pos: [], items: [], today: ymdLocal(new Date()),
   view: 'list',
-  filter: { status:'OPEN', due:'', q:'', customer:'', sort:'due' },
+  filter: { status:'OPEN', due:'', q:'', customer:'', brand:'', sort:'due' },
   detail: null,       // {po, items, log}
   sumOpen: {},
   lists: { customers: [], brands: [] },
@@ -1067,6 +1068,7 @@ function filteredPos(){
     if(f.status==='NOTPO' && !maybeNotPo(po)) return false;
     if(!['OPEN','ALL','NOJST','NODOC','NOTPO'].includes(f.status) && po.status!==f.status) return false;
     if(f.customer && po.customer!==f.customer) return false;
+    if(f.brand && !poBrands(po).some(b=>b.toLowerCase()===f.brand.toLowerCase())) return false;
     if(f.due){
       if(isClosed(po)) return false;
       if(f.due==='over' && !(po.due_date && po.due_date<t)) return false;
@@ -1118,6 +1120,7 @@ function renderList(){
     <div class="filters">
       <input id="q" type="search" placeholder="🔎 ค้นหา เลข P.O. / ลูกค้า / บาร์โค้ด / ชื่อสินค้า" value="${h(f.q)}">
       ${ddHtml('fCust', f.customer||'ลูกค้าทั้งหมด', !!f.customer)}
+      ${ddHtml('fBrand', f.brand||'แบรนด์ทั้งหมด', !!f.brand)}
       ${ddHtml('fSort', (SORTS.find(x=>x.value===f.sort)||SORTS[0]).label, false)}
     </div>
     <div class="list">${list.length ? list.map(cardHtml).join('') :
@@ -1127,6 +1130,7 @@ function renderList(){
   $$('.chip').forEach(b=>b.onclick=()=>{ f.status=b.dataset.st; f.due=''; renderList(); });
   const q=$('#q'); q.oninput=()=>{ f.q=q.value; clearTimeout(q._t); q._t=setTimeout(()=>{ renderList(); const n=$('#q'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
   $('#fCust').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกลูกค้า', opts:customerOpts('ลูกค้าทั้งหมด'), cur:f.customer, onPick:v=>{ f.customer=v; renderList(); }});
+  $('#fBrand').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกแบรนด์', opts:brandOpts('แบรนด์ทั้งหมด'), cur:f.brand||'', onPick:v=>{ f.brand=v; renderList(); }});
   $('#fSort').onclick=e=>ddToggle(e.currentTarget,{title:'เรียงลำดับ', opts:SORTS, cur:f.sort, search:false, onPick:v=>{ f.sort=v; renderList(); }});
   $$('.card').forEach(c=>c.onclick=()=>openDetail(c.dataset.id));
   $$('.card [data-ack]').forEach(l=>{ l.onclick=e=>e.stopPropagation();
@@ -2736,6 +2740,14 @@ function openDd(btn, {title, opts, cur, onPick, search}){
   if(q && !mobile) setTimeout(()=>q.focus(),30); else if(!q) setTimeout(()=>pop.focus(),30);
   DD={pop, back, btn};
   back.onclick=closeDd;
+}
+/** แบรนด์ทั้งหมด = รายชื่อในหน้า ⚙ + แบรนด์ใน P.O./รายการสินค้า พร้อมจำนวนใบ */
+function brandOpts(allLabel){
+  const cnt={}, name={};
+  S.pos.forEach(p=>{ if(p.status==='DELETED') return; poBrands(p).forEach(b=>{ const k=b.toLowerCase(); name[k]=name[k]||b; cnt[k]=(cnt[k]||0)+1; }); });
+  (S.lists.brands||[]).forEach(b=>{ const k=String(b).trim().toLowerCase(); if(k && !name[k]) name[k]=String(b).trim(); });
+  const keys=Object.keys(name).sort((a,b)=>name[a].localeCompare(name[b],'th'));
+  return [{value:'', label:allLabel}].concat(keys.map(k=>({value:name[k], label:name[k], n:(cnt[k]||0)+' ใบ'})));
 }
 function ddToggle(btn, cfg){ if(DD && DD.btn===btn){ closeDd(); return; } openDd(btn, cfg); }
 document.addEventListener('mousedown',e=>{ if(DD && !DD.pop.contains(e.target) && !DD.btn.contains(e.target) && !DD.back.contains(e.target)) closeDd(); }, true);
