@@ -140,6 +140,12 @@ body.view-blogger .fab{display:none}
 .tag{font-size:12px;border-radius:6px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);font-weight:500}
 .tag.warn{background:var(--orange-soft);color:var(--orange)}
 .tag.red{background:var(--red-soft);color:var(--red);font-weight:600}
+#reviewModal .modal-box{max-width:820px}
+.rv-meta{margin:10px 0;font-size:14px}
+.rv-doc{background:var(--soft);border-radius:10px;padding:10px;max-height:52vh;overflow:auto;display:grid;gap:10px;justify-items:center}
+.rv-doc .pg{box-shadow:0 1px 4px rgba(0,0,0,.3);max-width:100%}
+.rv-foot{flex-wrap:wrap}
+@media (max-width:640px){ .rv-foot .btn{flex:1 1 auto} .rv-foot [data-later]{order:3;flex-basis:100%} .rv-doc{max-height:45vh} }
 .pill-notpo{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
 .panel.review.notpo{border-color:var(--red);background:var(--red-soft)}
 .tags-end{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
@@ -633,6 +639,46 @@ function screenText(raw, head){
   if(kw || ean) return {result:'po', why:kw?'พบคำว่า '+kw[0]:'พบบาร์โค้ด '+ean+' รายการ'};
   return {result:'not_po', why:'ไม่พบคำว่า ใบสั่งซื้อ / Purchase Order / เลข P.O. และไม่มีบาร์โค้ดสินค้า'};
 }
+/* ---------- เรียนรู้จากคำตอบของผู้ใช้ ----------
+   รูปแบบเอกสาร = คำในหัวกระดาษหน้า 1 (ตัดตัวเลขออก) หรือ ไฟล์ไม่มีข้อความ → ลูกค้า + ชื่อไฟล์ (ตัวเลขเป็น #)
+   ผู้ใช้ตอบในหน้าต่างเด้ง → บันทึกรูปแบบ (Master screen_po / screen_notpo) → ใบต่อไปที่หน้าตาเหมือนกันระบบตัดสินเอง
+   กันพลาด: ใบที่หัวกระดาษมีคำว่า ใบสั่งซื้อ/Purchase Order/ใบสั่งของ จะไม่ถูกลบด้วยรูปแบบ "ไม่ใช่ P.O." */
+let SCREEN_RULES=null, SCREEN_RULES_WARN=false;
+async function loadScreenRules(force){
+  if(SCREEN_RULES && !force) return SCREEN_RULES;
+  try{ SCREEN_RULES=await call('screenRules',{}) || []; }catch(e){ SCREEN_RULES=SCREEN_RULES||[]; }
+  return SCREEN_RULES;
+}
+function headSig(head){
+  const toks=normThai(String(head||'')).toLowerCase().replace(/[0-9๐-๙]/g,' ').split(/[^a-z฀-๿]+/).filter(t=>t.length>=2);
+  return [...new Set(toks)].slice(0,24).join(' ');
+}
+function fileSig(po){ return 'file:'+String(po.customer||'').toLowerCase()+'|'+String(po.file_name||'').toLowerCase().replace(/\.pdf$/,'').replace(/[0-9]+/g,'#'); }
+const PO_TITLE=/purchase\s*order|ใบสั่งซื้อ|ใบสั่งของ/i;
+function matchScreenRule(sig){
+  if(!sig || !SCREEN_RULES || !SCREEN_RULES.length) return null;
+  if(/^file:/.test(sig)) return SCREEN_RULES.find(r=>r.sig===sig) || null;
+  const a=new Set(sig.split(' '));
+  let best=null, bestJ=0;
+  SCREEN_RULES.forEach(r=>{ if(/^file:/.test(r.sig)) return; const b=new Set(r.sig.split(' ')); let inter=0; a.forEach(t=>{ if(b.has(t)) inter++; });
+    const j=inter/(a.size+b.size-inter||1); if(j>bestJ){ bestJ=j; best=r; } });
+  return bestJ>=0.85 ? best : null;
+}
+async function docSig(po){
+  docSig.poTitle=false;
+  if(po.screen==='unknown' || !po.file_url) return fileSig(po);
+  const doc=await getPdfDoc(po), tc=await (await doc.getPage(1)).getTextContent();
+  const head=tc.items.filter(x=>x.str.trim()).sort((a,b)=>b.transform[5]-a.transform[5]||a.transform[4]-b.transform[4]).slice(0,14).map(x=>x.str).join(' ');
+  docSig.poTitle = PO_TITLE.test(normThai(head));
+  return headSig(head) || fileSig(po);
+}
+function learnScreen(po, kind, sig){
+  if(!sig) return;
+  SCREEN_RULES=(SCREEN_RULES||[]).filter(r=>r.sig!==sig).concat([{kind, sig}]);
+  call('addScreenRule',{kind, sig, sample:(po.customer||'')+' '+(po.file_name||po.po_no||'')}).then(r=>{ if(Array.isArray(r)) SCREEN_RULES=r; })
+    .catch(e=>{ if(!SCREEN_RULES_WARN){ SCREEN_RULES_WARN=true; toast(/ไม่รู้จักคำสั่ง/.test(e.message)?'ระบบจำรูปแบบเอกสารได้หลังอัปเดต Code.gs เป็น 1.6.1':'บันทึกรูปแบบเอกสารไม่ได้: '+e.message, true); } });
+}
+
 async function screenPdf(po){
   const [r, lib] = await Promise.all([call('getPdf',{id:po.id}), pdfLib()]);
   const bin=atob(r.b64), bytes=new Uint8Array(bin.length);
@@ -642,7 +688,13 @@ async function screenPdf(po){
   try{ for(let i=1;i<=Math.min(doc.numPages,5);i++){ const tc=await (await doc.getPage(i)).getTextContent(); txt+=tc.items.map(x=>x.str).join(' ')+'\n';
       if(i===1) head=tc.items.filter(x=>x.str.trim()).sort((a,b)=>b.transform[5]-a.transform[5]||a.transform[4]-b.transform[4]).slice(0,14).map(x=>x.str).join(' '); } }
   finally{ try{ doc.destroy(); }catch(e){} }
-  return screenText(txt, head);
+  const res=screenText(txt, head);
+  res.sig = headSig(head) || fileSig(po);
+  // รูปแบบที่ผู้ใช้เคยตอบไว้ มาก่อนเกณฑ์ทั่วไป
+  const rule=matchScreenRule(res.sig);
+  if(rule && rule.kind==='notpo' && !PO_TITLE.test(normThai(head))) return {result:'not_po', strong:true, sig:res.sig, why:'หน้าตาเหมือนเอกสารที่ผู้ใช้เคยระบุว่าไม่ใช่ P.O.'};
+  if(rule && rule.kind==='po' && res.result!=='po') return {result:'po', sig:res.sig, why:'หน้าตาเหมือนใบที่ผู้ใช้เคยรับเป็น P.O.'};
+  return res;
 }
 function screenSibling(po){
   return S.pos.find(o=>o.id!==po.id && po.email_link && o.email_link===po.email_link && !['DELETED','SUPERSEDED'].includes(o.status)
@@ -653,6 +705,7 @@ async function runScreening(){
   const todo=S.pos.filter(p=>p.file_url && (!p.screen || p.screen==='po') && !SCREEN_DONE.has(p.id) && !['DELETED','SUPERSEDED','CANCELLED','SHIPPED'].includes(p.status)).slice(0,15);
   if(!todo.length) return;
   SCREEN_BUSY=true;
+  await loadScreenRules();
   let moved=0, flagged=0;
   try{
     for(const po of todo){
@@ -677,9 +730,68 @@ async function runScreening(){
     if(S.detail) renderDetail(); else render();
     toast([moved?'ย้ายไฟล์แนบที่ไม่ใช่ P.O. ไป “ถูกลบ” '+moved+' ใบ':'', flagged?'พบเอกสารที่อาจไม่ใช่ P.O. '+flagged+' ใบ — กรุณาตรวจ':''].filter(Boolean).join(' • '));
   }
-  if(todo.length===15) setTimeout(runScreening, 1500);
+  if(todo.length===15) setTimeout(runScreening, 1500); else setTimeout(maybeAskReview, 1500);
 }
 function maybeNotPo(po){ return po.screen==='not_po' && !['DELETED','SUPERSEDED'].includes(po.status); }
+
+/* ---------- ระบบไม่แน่ใจ → ถามผู้ใช้ด้วยหน้าต่างเด้ง ----------
+   not_po (ไม่พบคำว่าใบสั่งซื้อ/บาร์โค้ด และไม่มีใบคู่ในเมลเดียวกัน) หรือ unknown (ไม่มีข้อความ เช่น รูปสแกน)
+   รับ P.O. → screen=confirmed (ไม่ถามอีก) / ไม่ใช่ P.O. → ลบออก (กู้คืนได้ที่ “ถูกลบ”) / ดูทีหลัง → ถามใหม่ครั้งหน้าที่เปิดแอป */
+const REVIEW_SKIP=new Set();
+function needsReview(p){ return ['not_po','unknown'].includes(p.screen) && !['DELETED','SUPERSEDED','CANCELLED','SHIPPED','DUPLICATE'].includes(p.status); }
+function maybeAskReview(){
+  if(!S.user || $('#reviewModal')) return;
+  const list=S.pos.filter(p=>needsReview(p) && !REVIEW_SKIP.has(p.id));
+  if(!list.length) return;
+  if(PENDING || userBusy() || $('.pdf-full')){ clearTimeout(maybeAskReview._t); maybeAskReview._t=setTimeout(maybeAskReview, 3000); return; }
+  openReviewModal(list[0], list.length);
+}
+async function openReviewModal(po, left){
+  // ใบที่รอตรวจอยู่แล้ว ถ้าหน้าตาเหมือนใบที่ผู้ใช้เพิ่งตอบไป → ตัดสินเองไม่ต้องถาม
+  let sig=null;
+  try{ await loadScreenRules(); sig=await docSig(po); }catch(e){}
+  const rule=matchScreenRule(sig);
+  if(rule && !(rule.kind==='notpo' && docSig.poTitle)){ reviewDecide(po, rule.kind==='po', sig, true); setTimeout(maybeAskReview, 600); return; }
+  openReviewModal2(po, left, sig);
+}
+function reviewDecide(po, isPo, sig, auto){
+  if(isPo){
+    const old=Object.assign({}, po);
+    syncPo(Object.assign({}, po, {screen:'confirmed'}));
+    bgCall('updatePO',{id:po.id, fields:{screen:'confirmed'}}, r=>syncPo(Object.assign({}, r, {screen:'confirmed'})), ()=>{ syncPo(old); render(); });
+    toast(auto ? 'รับ '+(po.po_no||'')+' เป็นใบ P.O. อัตโนมัติ (หน้าตาเหมือนใบที่เคยรับ)' : 'รับเป็นใบ P.O. แล้ว — ใบหน้าตาแบบนี้ระบบจะรับเองครั้งต่อไป');
+  } else {
+    const old=Object.assign({}, po), d=new Date();
+    syncPo(Object.assign({}, po, {screen:'not_po', status:'DELETED', prev_status:po.status, deleted_by:S.user, deleted_at:ymdLocal(d)+' '+d.toTimeString().slice(0,8)}));
+    bgCall('deletePO',{id:po.id, reason:auto?'ระบบคัดกรอง: หน้าตาเหมือนเอกสารที่ผู้ใช้เคยระบุว่าไม่ใช่ P.O.':'ผู้ใช้ตรวจแล้ว: เอกสารนี้ไม่ใช่ P.O.'}, r=>syncPo(r), ()=>{ syncPo(old); render(); });
+    if(S.detail && S.detail.po.id===po.id) closeDetail();
+    toast(auto ? 'ลบ '+(po.po_no||'เอกสาร')+' อัตโนมัติ (หน้าตาเหมือนเอกสารที่ไม่ใช่ P.O.) — กู้คืนได้ที่ “🗑 ถูกลบ”' : 'ลบออกแล้ว — เอกสารหน้าตาแบบนี้ระบบจะลบเองครั้งต่อไป (กู้คืนได้ที่ “🗑 ถูกลบ”)');
+  }
+  if(!auto) learnScreen(po, isPo?'po':'notpo', sig);
+  render();
+}
+function openReviewModal2(po, left, sig){
+  const why = po.screen==='unknown'
+    ? 'ไฟล์นี้ไม่มีข้อความให้อ่าน (อาจเป็นรูปสแกนหรือแฟกซ์) ระบบจึงตรวจเองไม่ได้'
+    : 'ระบบไม่พบคำว่า “ใบสั่งซื้อ / Purchase Order / เลข P.O.” และไม่มีบาร์โค้ดสินค้าในไฟล์';
+  const md=openModal(`<div class="modal-head">ไฟล์นี้เป็นใบ P.O. หรือไม่?</div><div class="modal-body">
+      <div class="alert warn">⚠ ${h(why)} — กรุณาดูเอกสารแล้วเลือก${left>1?` <b>(รอตรวจ ${left} ใบ)</b>`:''}</div>
+      <div class="rv-meta"><b>${h(po.customer||'ยังไม่ระบุลูกค้า')}</b> • ${h(po.po_no||'-')}
+        <div class="ref">${po.email_subject?'เมล: '+h(po.email_subject)+'<br>':''}${po.file_name?'ไฟล์: '+h(po.file_name)+' • ':''}เข้ามา ${h(thDateTime(po.created_at))}</div></div>
+      <div class="rv-doc" id="rvDoc"><div class="loading"><span class="spin"></span> กำลังโหลดเอกสาร…</div></div>
+    </div><div class="modal-foot rv-foot"><button class="btn" data-later>ดูทีหลัง</button>
+      <button class="btn danger" data-notpo>🗑 เอกสารนี้ไม่ใช่ P.O.</button><button class="btn primary" data-ispo>✓ รับ P.O.</button></div>`, true);
+  md.el.id='reviewModal';
+  const done=()=>{ md.close(); setTimeout(maybeAskReview, 600); };
+  const later=()=>{ REVIEW_SKIP.add(po.id); md.close(); setTimeout(maybeAskReview, 600); };
+  $('[data-later]',md.el).onclick=later;
+  const x=$('.modal-x',md.el); if(x) x.onclick=later;
+  $('[data-ispo]',md.el).onclick=()=>{ done(); reviewDecide(po, true, sig, false); };
+  $('[data-notpo]',md.el).onclick=()=>{ done(); reviewDecide(po, false, sig, false); };
+  if(!po.file_url){ $('#rvDoc',md.el).innerHTML='<div class="empty" style="padding:12px">ไม่มีไฟล์ PDF</div>'; return; }
+  getPdfDoc(po).then(doc=>{ const el=$('#rvDoc',md.el); if(!el) return; return renderPages(doc, el, Math.max(200, Math.min(el.clientWidth-20, 720))); })
+    .catch(e=>{ const el=$('#rvDoc',md.el); if(el) el.innerHTML=`<div class="empty" style="padding:12px">แสดงไฟล์ไม่ได้: ${h(e.message)}${po.file_url?` <a href="${h(po.file_url)}" target="_blank" rel="noopener">เปิดใน Drive</a>`:''}</div>`; });
+}
 
 /* ---------- สถานะเอกสาร: ติ๊กอย่างเดียว (doc_status = '' | 'จัดทำแล้ว') ---------- */
 const DOC_DONE='จัดทำแล้ว';
@@ -1056,7 +1168,7 @@ async function load(silent){
     if(silent && PENDING) return;                       // ยังบันทึกไม่ครบ — รอรอบหน้า
     S.pos = d.pos; S.items = d.items; if(d.today) S.today=d.today; if(d.lists) S.lists=d.lists;
     if(silent) renderWhenIdle(render); else render();
-    setTimeout(runScreening, 2500);
+    setTimeout(runScreening, 2500); setTimeout(maybeAskReview, 4000);
   }catch(e){ if(!silent) fail(e); }
 }
 
@@ -2004,7 +2116,8 @@ function renderDetail(){
   $$('[data-resolve]',ov2).forEach(b=>b.onclick=()=>resolveDup(b.dataset.resolve));
   $$('[data-restore]',ov2).forEach(b=>b.onclick=()=>restorePo(po.id));
   $$('[data-delpo]',ov2).forEach(b=>b.onclick=()=>deletePo(po.id));
-  $$('[data-screenok]',ov2).forEach(b=>b.onclick=()=>{ saveField('screen','confirmed'); renderDetail(); toast('ยืนยันว่าเป็นใบ P.O. แล้ว'); });
+  $$('[data-screenok]',ov2).forEach(b=>b.onclick=async()=>{ let sig=null; try{ sig=await docSig(po); }catch(e){} reviewDecide(po, true, sig, false); });
+  $$('[data-screennot]',ov2).forEach(b=>b.onclick=async()=>{ let sig=null; try{ sig=await docSig(po); }catch(e){} reviewDecide(po, false, sig, false); });
   $$('[data-pickpo]',ov2).forEach(b=>b.onclick=()=>openPoPick(po));
   const pt=$('#pdfToggle'); if(pt) pt.onclick=e=>{ if(e.target.closest('#pdfFull')) return; store.set('po.pdfHidden', pdfHidden()?'0':'1'); renderDetail(); };
   $$('[data-pick]').forEach(b=>b.onclick=()=>pickForPo(b.dataset.pick));
@@ -2750,7 +2863,7 @@ function reviewPanel(po){
       <button class="btn sm primary" data-restore>↺ กู้คืน</button></div></div>`;
   if(maybeNotPo(po)) return `<div class="panel review notpo"><h3>⚠ ไฟล์นี้อาจไม่ใช่ใบ P.O.</h3>
       <div class="ref">ระบบอ่านไฟล์แล้วไม่พบคำว่า “ใบสั่งซื้อ / Purchase Order / เลข P.O.” และไม่มีบาร์โค้ดสินค้า (เช่น เป็นเอกสารข้อมูลสาขาที่แนบมากับเมล) — ดูไฟล์ด้านล่างแล้วเลือก</div>
-      <div class="step-actions" style="margin-top:10px"><button class="btn danger" data-delpo>🗑 ไม่ใช่ P.O. — ลบออก</button><button class="btn" data-screenok>✓ เป็นใบ P.O. จริง</button></div></div>`;
+      <div class="step-actions" style="margin-top:10px"><button class="btn danger" data-screennot>🗑 เอกสารนี้ไม่ใช่ P.O.</button><button class="btn primary" data-screenok>✓ รับ P.O.</button></div></div>`;
   if(po.replaces) return `<div class="panel review new"><div class="row"><span class="t">🔗 <b>อัปเดตจาก P.O. เดิม</b> — ใบนี้ใช้แทนใบเก่าแล้ว</span>
       <button class="btn sm" data-open="${h(po.replaces)}">เปิดใบเดิม</button></div></div>`;
   return '';
