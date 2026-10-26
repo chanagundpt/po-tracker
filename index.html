@@ -618,8 +618,15 @@ function jstTagHtml(po){
    - PDF ที่เป็นรูปสแกน (ไม่มีข้อความ) ตัดสินไม่ได้ → unknown ไม่เตือน
    - ไม่ใช่ P.O. + เมลเดียวกันมีใบ P.O. จริง → ย้ายไป "ถูกลบ" อัตโนมัติ (กู้คืนได้) / ไม่มีใบคู่ → ติดป้ายให้คนตรวจ */
 const SCREEN_DONE=new Set(); let SCREEN_BUSY=false;
-function screenText(raw){
-  const t=normThai(String(raw||''));
+// เอกสารอื่นที่ส่งมาทางเมล (ใบรับสินค้า/ใบลดหนี้/ใบแจ้งหนี้/ใบคืนของ) — ดูจากหัวกระดาษ ไม่ใช่ทั้งหน้า
+// เพราะใบ P.O. บางเจ้ามีคำว่า invoice/รับสินค้า ในเงื่อนไขท้ายใบ (ตรวจหัวกระดาษตัวอย่าง 11 ใบแล้ว ไม่มีใบไหนเข้าข่าย)
+const NOT_PO_HEAD=/ใบรับสินค้า|ใบรับของ|goods\s*receiv|receiving\s*(report|note)|ใบลดหนี้|credit\s*note|debit\s*note|ใบเพิ่มหนี้|ใบแจ้งหนี้|ใบวางบิล|ใบกำกับภาษี|tax\s*invoice|ใบเสร็จ|ใบคืนสินค้า|ใบส่งคืน|return\s*(note|order|request)|ใบเสนอราคา|quotation/i;
+const NOT_PO_ANY=/received\s*(number|no\.?)\s*:|ใบรับสินค้าตามเอกสาร/i;
+const SCREEN_VER='2';   // เปลี่ยนเลขเมื่อเกณฑ์เปลี่ยน → ใบที่เคยผ่าน (po) จะถูกตรวจใหม่
+function screenText(raw, head){
+  const t=normThai(String(raw||'')), hd=normThai(String(head||''));
+  const neg=hd.match(NOT_PO_HEAD) || t.match(NOT_PO_ANY);
+  if(neg && !/purchase\s*order|ใบสั่งซื้อ|ใบสั่งของ/i.test(hd)) return {result:'not_po', strong:true, why:'หัวเอกสารเป็น “'+neg[0]+'” ไม่ใช่ใบสั่งซื้อ'};
   if(t.replace(/\s/g,'').length<40) return {result:'unknown', why:'ไม่มีข้อความในไฟล์ (อาจเป็นรูปสแกน)'};
   const kw=t.match(/purchase\s*order|ใบสั่งซื้อ|สั่งซื้อ|ใบสั่งของ|p\s*\.?\s*o\s*\.?\s*(?:no|number|#|เลขที่)|order\s*(?:no|number|date)|เลขที่ใบสั่ง/i);
   const ean=(t.match(/(?:^|[^\d])(\d{13})(?=[^\d]|$)/g)||[]).map(x=>x.replace(/\D/g,'')).filter(validEan13).length;
@@ -631,18 +638,19 @@ async function screenPdf(po){
   const bin=atob(r.b64), bytes=new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
   const doc=await lib.getDocument({data:bytes}).promise;
-  let txt='';
-  try{ for(let i=1;i<=Math.min(doc.numPages,5);i++){ const tc=await (await doc.getPage(i)).getTextContent(); txt+=tc.items.map(x=>x.str).join(' ')+'\n'; } }
+  let txt='', head='';
+  try{ for(let i=1;i<=Math.min(doc.numPages,5);i++){ const tc=await (await doc.getPage(i)).getTextContent(); txt+=tc.items.map(x=>x.str).join(' ')+'\n';
+      if(i===1) head=tc.items.filter(x=>x.str.trim()).sort((a,b)=>b.transform[5]-a.transform[5]||a.transform[4]-b.transform[4]).slice(0,14).map(x=>x.str).join(' '); } }
   finally{ try{ doc.destroy(); }catch(e){} }
-  return screenText(txt);
+  return screenText(txt, head);
 }
 function screenSibling(po){
   return S.pos.find(o=>o.id!==po.id && po.email_link && o.email_link===po.email_link && !['DELETED','SUPERSEDED'].includes(o.status)
-    && o.screen!=='not_po' && (o.screen==='po' || o.screen==='confirmed' || itemsOf(o.id).length));
+    && o.screen!=='not_po' && (/^po/.test(o.screen||'') || o.screen==='confirmed' || itemsOf(o.id).length));
 }
 async function runScreening(){
   if(SCREEN_BUSY || !S.user || MODE==='none') return;
-  const todo=S.pos.filter(p=>p.file_url && !p.screen && !SCREEN_DONE.has(p.id) && !['DELETED','SUPERSEDED','CANCELLED','SHIPPED'].includes(p.status)).slice(0,15);
+  const todo=S.pos.filter(p=>p.file_url && (!p.screen || p.screen==='po') && !SCREEN_DONE.has(p.id) && !['DELETED','SUPERSEDED','CANCELLED','SHIPPED'].includes(p.status)).slice(0,15);
   if(!todo.length) return;
   SCREEN_BUSY=true;
   let moved=0, flagged=0;
@@ -650,11 +658,12 @@ async function runScreening(){
     for(const po of todo){
       SCREEN_DONE.add(po.id);
       let res; try{ res=await screenPdf(po); }catch(e){ console.warn('screen', po.po_no, e); continue; }
-      const cur=S.pos.find(p=>p.id===po.id); if(!cur || cur.screen) continue;
+      const cur=S.pos.find(p=>p.id===po.id); if(!cur || (cur.screen && cur.screen!=='po')) continue;
+      if(res.result==='po') res.result='po'+SCREEN_VER;
       try{
-        if(res.result==='not_po' && screenSibling(cur)){
+        if(res.result==='not_po' && (res.strong || screenSibling(cur))){
           let r=await call('updatePO',{id:cur.id, fields:{screen:'not_po'}}); syncPo(Object.assign({}, cur, r, {screen:'not_po'}));
-          r=await call('deletePO',{id:cur.id, reason:'ระบบคัดกรอง: ไฟล์แนบนี้ไม่ใช่ใบ P.O. ('+res.why+') — เมลเดียวกันมีใบ P.O. แล้ว'});
+          r=await call('deletePO',{id:cur.id, reason:'ระบบคัดกรอง: ไฟล์นี้ไม่ใช่ใบ P.O. ('+res.why+')'+(res.strong?'':' — เมลเดียวกันมีใบ P.O. แล้ว')});
           syncPo(Object.assign({}, r, {screen:'not_po'})); moved++;
         } else {
           const r=await call('updatePO',{id:cur.id, fields:{screen:res.result}});
