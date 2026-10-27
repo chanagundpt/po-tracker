@@ -471,7 +471,8 @@ body.locked .top, body.locked main, body.locked .fab, body.locked #demoBar{displ
 .al-in:focus{outline:2px solid var(--accent);outline-offset:-1px}
 .al-in.chg{border-color:var(--accent);background:var(--accent-soft)}
 .al-in.over{border-color:var(--orange)}
-.ab-cell{flex-wrap:nowrap!important}
+.ab-cell{flex-wrap:wrap!important;row-gap:2px}
+.ab-cell>.ref,.ab-cell>.ab-lk{flex-basis:100%;white-space:normal}
 .al-in.neg{border-color:var(--red);background:var(--red-soft);color:var(--red)}
 .ab-lk{flex-basis:100%;font-size:11.5px;color:var(--accent)}
 .ab-lk:empty{display:none}
