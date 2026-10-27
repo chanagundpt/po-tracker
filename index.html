@@ -473,6 +473,13 @@ body.locked .top, body.locked main, body.locked .fab, body.locked #demoBar{displ
 .al-in.over{border-color:var(--orange)}
 .ab-cell{flex-wrap:nowrap!important}
 .al-in.neg{border-color:var(--red);background:var(--red-soft);color:var(--red)}
+.ab-lk{flex-basis:100%;font-size:11.5px;color:var(--accent)}
+.ab-lk:empty{display:none}
+.ab-lkt{cursor:help}
+.lm-list{display:grid;gap:8px}
+.lm-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}
+.lm-row select{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:7px 8px;min-width:0}
+@media (max-width:640px){ .lm-row{grid-template-columns:1fr} }
 .ab-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
 .ab-tab{flex:none;display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 10px;color:var(--ink);font-size:13px}
 .ab-tab span{color:var(--muted);font-size:12px}
@@ -1746,11 +1753,12 @@ async function openAllocBoard(pos){
   S.pos.filter(p=>!selIds.has(p.id) && ALLOC_ACTIVE.includes(p.status)).forEach(po=>itemsOf(po.id).forEach(it=>{
     if(it.qty_ready===''||it.qty_ready==null || !Number(it.qty_ready) || itemJstCut(po,it)) return;
     const k=itemProdKey(it).key; if(!byKey[k]) return;
-    (other[k]=other[k]||{qty:0, list:[]}); other[k].qty+=Number(it.qty_ready); other[k].list.push((po.customer||'')+' '+po.po_no+' '+num(it.qty_ready));
+    (other[k]=other[k]||{qty:0, list:[], byCust:{}}); other[k].qty+=Number(it.qty_ready); other[k].list.push((po.customer||'')+' '+po.po_no+' '+num(it.qty_ready));
+    other[k].byCust[po.customer||'']=(other[k].byCust[po.customer||'']||0)+Number(it.qty_ready);
   }));
   const orig={}, val={};
   Object.keys(cells).forEach(k=>{ const it=cells[k].it; const v=it.qty_ready===''||it.qty_ready==null ? '' : String(Number(it.qty_ready)); orig[k]=v; val[k]=v; });
-  const B={pos, prods, byKey, cells, other, orig, val, stock:null, stockErr:'', stockAt:0, tab:pos[0].id, mobile:window.matchMedia('(max-width:760px)').matches};
+  const B={pos, prods, byKey, cells, other, orig, val, lockMap:{}, stock:null, stockErr:'', stockAt:0, tab:pos[0].id, mobile:window.matchMedia('(max-width:760px)').matches};
   const md=openModal(`<div class="modal-head">✏️ Allocate บนหน้าจอ • ${pos.length} P.O. • ${prods.length} สินค้า</div>
     <div class="modal-body ab-body"><div class="ab-bar" id="abBar"></div><div id="abMain"></div></div>
     <div class="modal-foot"><span class="al-sum" id="abSum" style="flex:1"></span><button class="btn" data-x>ยกเลิก</button><button class="btn primary" id="abSave">บันทึก</button></div>`, true);
@@ -1767,24 +1775,64 @@ async function abLoadStock(B){
   const skus=B.prods.filter(p=>p.sku).map(p=>p.sku);
   B.stock=null; B.stockErr=''; abBar(B);
   if(!skus.length){ B.stockErr='ไม่มีสินค้าที่จับคู่ SKU ของ JST ได้'; abBar(B); abUpdate(B); return; }
-  try{ const r=await call('jstStock',{skus}); B.stock=r.rows||{}; B.stockAt=r.at||Date.now(); }
+  try{ const r=await call('jstStock',{skus}); B.stock=r.rows||{}; B.stockAt=r.at||Date.now(); B.lockMap=r.lockMap||{}; }
   catch(e){ B.stockErr = /ไม่รู้จักคำสั่ง/.test(e.message) ? 'ต้องอัปเดต Code.gs เป็น 1.7.0 ก่อน จึงจะดึงสต๊อก JST ได้' : 'ดึงสต๊อก JST ไม่ได้: '+e.message; }
   abBar(B); abDraw(B);
 }
+/* ล็อคสต๊อกแยกร้านของ JST: AvailableQty (= สต๊อก − ออเดอร์ออนไลน์) ยังไม่หักส่วนนี้
+   แต่ละลูกค้าใช้ "ล็อคของร้านตัวเอง" ก่อน ส่วนเกินค่อยใช้ "ส่วนกลาง" = พร้อมขาย − ล็อคทุกร้าน
+   คงเหลือส่วนกลาง = ส่วนกลาง − Σ max(0, ความต้องการของลูกค้า − ล็อคของลูกค้านั้น) */
+function lockNorm(s){
+  let t=String(s||'');
+  const brands=(S.lists.brands||[]).concat(['&honey','and honey']).filter(b=>String(b).trim().length>=3).sort((a,b)=>b.length-a.length);
+  brands.forEach(b=>{ const i=t.toLowerCase().indexOf(String(b).toLowerCase()); if(i>=0) t=t.slice(0,i)+' '+t.slice(i+String(b).length); });
+  t=t.toLowerCase().replace(/&/g,' and ').replace(/[^a-z0-9฀-๿]/g,'');
+  return t.replace(/s$/,'');
+}
+function lockCustomer(B, shop){
+  if(B.lockMap && Object.prototype.hasOwnProperty.call(B.lockMap, shop)) return (B.lockMap[shop] && B.lockMap[shop]!=='-') ? B.lockMap[shop] : null;   // '-' = ไม่ใช่ลูกค้าในระบบ
+  const sk=lockNorm(shop); if(sk.length<3) return null;
+  const custs=[...new Set((S.lists.customers||[]).concat(S.pos.map(p=>p.customer)).filter(c=>c && c!=='ยังไม่ระบุ'))];
+  const hits=custs.filter(c=>{ const ck=lockNorm(c); return ck.length>=3 && (sk===ck || sk.includes(ck) || ck.includes(sk)); });
+  return hits.length===1 ? hits[0] : null;
+}
 function abCalc(B, p){
   const st=p.sku && B.stock ? B.stock[p.sku] : null;
-  const typed=p.cells.reduce((a,c)=>a+(c.cut?0:(Number(B.val[c.po.id+'|'+c.it.line])||0)),0);
-  const oth=(B.other[p.key]||{}).qty||0;
   const avail = st ? st.available : null;
-  return {st, avail, typed, oth, left: avail==null ? null : avail-oth-typed, ordered:p.cells.reduce((a,c)=>a+(Number(c.it.qty)||0),0)};
+  const locks=(st && st.locks)||[];
+  const lockTotal = st ? Math.max(st.shopLock||0, locks.reduce((a,l)=>a+l.qty,0)) : 0;
+  const lockBy={}; let unmatched=0;
+  locks.forEach(l=>{ const c=lockCustomer(B, l.shop); if(c) lockBy[c]=(lockBy[c]||0)+l.qty; else unmatched+=l.qty; });
+  const dem={};                                  // ความต้องการต่อลูกค้า (ที่กรอก + จองใน P.O. อื่น)
+  let typed=0;
+  p.cells.forEach(c=>{ if(c.cut) return; const v=Number(B.val[c.po.id+'|'+c.it.line])||0; typed+=v; const k=c.po.customer||''; dem[k]=(dem[k]||0)+v; });
+  const o=B.other[p.key]; const oth=o?o.qty:0;
+  if(o) Object.keys(o.byCust).forEach(k=>{ dem[k]=(dem[k]||0)+o.byCust[k]; });
+  let overflow=0, typedOver=false; const lockLeft={};
+  Object.keys(dem).forEach(k=>{ const L=lockBy[k]||0, over=Math.max(0, dem[k]-L); overflow+=over; lockLeft[k]=Math.max(0, L-dem[k]);
+    if(over>0 && p.cells.some(c=>!c.cut && (c.po.customer||'')===k && (Number(B.val[c.po.id+'|'+c.it.line])||0)>0)) typedOver=true; });
+  const free = avail==null ? null : avail-lockTotal;
+  return {st, avail, typed, oth, lockTotal, lockBy, lockLeft, unmatched, locks, free, typedOver,
+    left: avail==null ? null : free-overflow, ordered:p.cells.reduce((a,c)=>a+(Number(c.it.qty)||0),0)};
 }
 function abBar(B){
   const el=$('#abBar',B.md.el); if(!el) return;
   const t=B.stockAt ? new Date(B.stockAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '';
   el.innerHTML = `<span class="t">${B.stock ? 'สต๊อก JST (พร้อมขาย) ดึงเมื่อ <b>'+t+' น.</b>' : B.stockErr ? '<span class="ab-err">⚠ '+h(B.stockErr)+'</span>' : '<span class="spin"></span> กำลังดึงสต๊อกจาก JST…'}
-      • คงเหลือ = JST พร้อมขาย − จองใน P.O. อื่น − ที่กรอก • <span class="ab-low">ตัวแดง</span> = เหลือน้อยกว่า ${STOCK_LOW}</span>
-    <span class="ab-short" id="abShort"></span><button class="btn sm" id="abReload">⟳ ดึงสต๊อกใหม่</button>`;
+      • พร้อมขาย = สต๊อก − ออเดอร์ออนไลน์ • ส่วนกลาง = พร้อมขาย − ล็อคทุกร้าน − ส่วนที่เกินล็อคของแต่ละร้าน (กรอก + จองใน P.O. อื่น) • <span class="ab-low">ตัวแดง</span> = น้อยกว่า ${STOCK_LOW}</span>
+    <span class="ab-short" id="abShort"></span>${abLockShops(B).length?`<button class="btn sm" id="abMap">🔗 จับคู่ร้านที่ล็อคสต๊อก${abUnmatched(B)?' ('+abUnmatched(B)+' ร้านยังไม่จับคู่)':''}</button>`:''}<button class="btn sm" id="abReload">⟳ ดึงสต๊อกใหม่</button>`;
   $('#abReload',el).onclick=()=>abLoadStock(B);
+  const mp=$('#abMap',el); if(mp) mp.onclick=()=>abMapShops(B);
+}
+function abLockCell(B,p,c){
+  if(!c.st) return '<span class="ref">-</span>';
+  if(!c.lockTotal) return '<span class="ref">0</span>';
+  const list=c.locks.map(l=>{ const cu=lockCustomer(B,l.shop); return `${l.shop}: ${num(l.qty)}${cu?' → '+cu:' (ยังไม่จับคู่ลูกค้า)'}`; }).join('\n');
+  return `<b class="ab-lkt" title="${h(list)}">🔒 ${num(c.lockTotal)}</b>${c.unmatched?`<div class="ab-oth">ยังไม่จับคู่ร้าน ${num(c.unmatched)}</div>`:''}`;
+}
+function abLockHint(c, cust){
+  const L=c.lockBy[cust]||0; if(!L) return '';
+  return `🔒 ล็อคให้ร้านนี้ ${num(L)} • เหลือ ${num(c.lockLeft[cust]!=null?c.lockLeft[cust]:L)}`;
 }
 function abStockCell(B,p,c){
   if(!p.sku) return '<span class="ref">ไม่พบใน JST</span>';
@@ -1794,7 +1842,7 @@ function abStockCell(B,p,c){
 }
 function abLeftCell(B,c){
   if(c.left==null) return '<span class="ref">-</span>';
-  const msg = c.left>=0 ? '' : c.typed>0 ? '⚠ ของไม่พอ ขาด '+num(-c.left) : '⚠ P.O. อื่นจองเกินสต๊อกอยู่แล้ว '+num(-c.left);
+  const msg = c.left>=0 ? '' : c.typedOver ? '⚠ ของไม่พอ ขาด '+num(-c.left) : '⚠ ส่วนกลางไม่พออยู่แล้ว (ล็อค/P.O. อื่น) '+num(-c.left);
   return `<b class="${c.left<0?'ab-neg':c.left<STOCK_LOW?'ab-low':''}">${num(c.left)}</b>${msg?`<div class="ab-negtx">${msg}</div>`:''}`;
 }
 function abOtherTx(B,p){
@@ -1803,19 +1851,20 @@ function abOtherTx(B,p){
 }
 function abInput(B,c){
   const k=c.po.id+'|'+c.it.line;
-  return `<div class="ab-cell${c.cut?' cut':''}"><input class="al-in" type="number" inputmode="numeric" min="0" data-k="${h(k)}" value="${h(B.val[k])}" placeholder="-"><span class="od">/${num(c.it.qty)}</span>${c.cut?'<div class="ref">ตัด JST แล้ว</div>':''}</div>`;
+  const cc=abCalc(B, B.byKey[c.key]);
+  return `<div class="ab-cell${c.cut?' cut':''}"><input class="al-in" type="number" inputmode="numeric" min="0" data-k="${h(k)}" value="${h(B.val[k])}" placeholder="-"><span class="od">/${num(c.it.qty)}</span>${c.cut?'<div class="ref">ตัด JST แล้ว</div>':''}<div class="ab-lk">${abLockHint(cc, c.po.customer||'')}</div></div>`;
 }
 function abDraw(B){
   const el=$('#abMain',B.md.el); if(!el) return;
   B.mobile=window.matchMedia('(max-width:760px)').matches;
   const due=po=>po.due_date?'ส่ง '+thDate(po.due_date,true):'ไม่มีกำหนดส่ง';
   if(!B.mobile){
-    el.innerHTML=`<div class="ab-wrap"><table class="ab-t"><thead><tr><th class="ab-p">สินค้า</th><th class="ab-n">JST<br>พร้อมขาย</th><th class="ab-n">คงเหลือ<br>หลังจัด</th>
+    el.innerHTML=`<div class="ab-wrap"><table class="ab-t"><thead><tr><th class="ab-p">สินค้า</th><th class="ab-n">JST<br>พร้อมขาย</th><th class="ab-n">ล็อคสต๊อก<br>ร้าน</th><th class="ab-n">คงเหลือ<br>ส่วนกลาง</th>
       ${B.pos.map(po=>`<th class="ab-po"><div class="ab-poh"><b>${h(po.customer||'-')}</b><span>${h(po.po_no)}</span><small>${h(due(po))}</small></div>
         <button class="btn sm" data-fill="${h(po.id)}">✓ พร้อมส่งทั้งใบ</button></th>`).join('')}</tr></thead>
       <tbody>${B.prods.map((p,i)=>{ const c=abCalc(B,p); return `<tr data-p="${i}">
         <td class="ab-p"><div class="nm">${h(p.name)}</div><div class="ref">${h(p.sku||p.barcode||'')}</div>${abOtherTx(B,p)}</td>
-        <td class="ab-n">${abStockCell(B,p,c)}</td><td class="ab-n ab-left">${abLeftCell(B,c)}</td>
+        <td class="ab-n">${abStockCell(B,p,c)}</td><td class="ab-n">${abLockCell(B,p,c)}</td><td class="ab-n ab-left">${abLeftCell(B,c)}</td>
         ${B.pos.map(po=>{ const cc=p.cells.find(x=>x.po.id===po.id); return `<td class="ab-c">${cc?abInput(B,cc):'<span class="ref">–</span>'}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
   } else {
     const po=B.pos.find(x=>x.id===B.tab)||B.pos[0];
@@ -1823,7 +1872,7 @@ function abDraw(B){
       <div class="ab-mhead"><span class="ref">${h(due(po))}</span><button class="btn sm" data-fill="${h(po.id)}">✓ พร้อมส่งทั้งใบ</button></div>
       <div class="ab-list">${B.prods.map((p,i)=>{ const cc=p.cells.find(x=>x.po.id===po.id); if(!cc) return ''; const c=abCalc(B,p); return `<div class="ab-m" data-p="${i}">
         <div class="nm">${h(p.name)}</div><div class="ref">${h(p.sku||p.barcode||'')}</div>
-        <div class="ab-mst">JST ${abStockCell(B,p,c)} • คงเหลือ <span class="ab-left">${abLeftCell(B,c)}</span></div>${abOtherTx(B,p)}
+        <div class="ab-mst">JST ${abStockCell(B,p,c)}${c.lockTotal?' • ล็อค '+abLockCell(B,p,c):''} • ส่วนกลาง <span class="ab-left">${abLeftCell(B,c)}</span></div>${abOtherTx(B,p)}
         <div class="ab-mrow"><span>สั่ง ${num(cc.it.qty)}</span><span>พร้อมส่ง ${abInput(B,cc)}</span></div></div>`; }).join('')}</div>`;
     $$('[data-tab]',el).forEach(b=>b.onclick=()=>{ B.tab=b.dataset.tab; abDraw(B); });
   }
@@ -1837,19 +1886,50 @@ function abUpdate(B){
   const el=B.md.el; let short=0;
   B.prods.forEach((p,i)=>{
     // บล็อกเฉพาะสินค้าที่หน้านี้กรอกจำนวนเพิ่ม (ถ้าติดลบเพราะ P.O. อื่นจองไว้อย่างเดียว ใส่ 0 ที่นี่แล้วบันทึกได้)
-    const c=abCalc(B,p); if(c.left!=null && c.left<0 && c.typed>0) short++;
+    const c=abCalc(B,p); if(c.left!=null && c.left<0 && c.typedOver) short++;
     $$(`[data-p="${i}"]`,el).forEach(row=>{ const L=$('.ab-left',row); if(L) L.innerHTML=abLeftCell(B,c); row.classList.toggle('neg', c.left!=null && c.left<0); });
   });
   $$('input[data-k]',el).forEach(inp=>{ const k=inp.dataset.k, c=B.cells[k], v=B.val[k];
     if(document.activeElement!==inp) inp.value=v;
     inp.classList.toggle('chg', v!==B.orig[k]); inp.classList.toggle('over', v!=='' && Number(v)>Number(c.it.qty));
-    const p=B.byKey[c.key], cc=abCalc(B,p); inp.classList.toggle('neg', !c.cut && v!=='' && Number(v)>0 && cc.left!=null && cc.left<0); });
+    const p=B.byKey[c.key], cc=abCalc(B,p); inp.classList.toggle('neg', !c.cut && v!=='' && Number(v)>0 && cc.left!=null && cc.left<0 && (cc.lockLeft[c.po.customer||'']||0)===0);
+    const hint=inp.closest('.ab-cell') && inp.closest('.ab-cell').querySelector('.ab-lk'); if(hint) hint.innerHTML=abLockHint(cc, c.po.customer||''); });
   const ch=Object.keys(B.val).filter(k=>B.val[k]!==B.orig[k]), npo=new Set(ch.map(k=>k.split('|')[0])).size;
   const sh=$('#abShort',el); if(sh) sh.innerHTML = short ? `<span class="ab-negtx">⚠ ของไม่พอ ${short} รายการ — แก้ให้คงเหลือไม่ติดลบก่อนบันทึก</span>` : '';
   $('#abSum',el).textContent = ch.length ? 'แก้ '+ch.length+' ช่อง ใน '+npo+' P.O.' : 'ยังไม่มีการเปลี่ยนแปลง';
   const sv=$('#abSave',el); sv.disabled = !ch.length || short>0;
   sv.textContent = short ? '⛔ คงเหลือติดลบ' : ch.length ? '✓ บันทึก '+npo+' P.O.' : 'บันทึก';
   B.short=short;
+}
+function abLockShops(B){
+  if(!B.stock) return [];
+  const set=new Set(); Object.values(B.stock).forEach(r=>(r.locks||[]).forEach(l=>set.add(l.shop)));
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+function abUnmatched(B){ return abLockShops(B).filter(s=>!lockCustomer(B,s) && !(B.lockMap && Object.prototype.hasOwnProperty.call(B.lockMap,s))).length; }
+function abMapShops(B){
+  const shops=abLockShops(B);
+  const custs=[...new Set((S.lists.customers||[]).concat(S.pos.map(p=>p.customer)).filter(c=>c && c!=='ยังไม่ระบุ'))].sort((a,b)=>a.localeCompare(b,'th'));
+  const md=openModal(`<div class="modal-head">🔗 จับคู่ร้านที่ล็อคสต๊อกใน JST กับลูกค้า</div><div class="modal-body">
+      <div class="ref" style="margin-bottom:8px">ชื่อร้านใน JST อาจไม่ตรงกับชื่อลูกค้า (เช่น “&HONEY MATSUMOTO KIYOSHI” = Central Food Retail) — ระบบเดาให้แล้ว แก้ได้ตรงนี้ จำไว้ใช้ครั้งต่อไป</div>
+      <div class="lm-list">${shops.map((s,i)=>{ const cur=lockCustomer(B,s)||''; const manual=B.lockMap && Object.prototype.hasOwnProperty.call(B.lockMap,s);
+        return `<div class="lm-row"><span class="lm-shop">${h(s)}${!manual&&cur?' <span class="ref">(เดาอัตโนมัติ)</span>':''}</span>
+          <select data-shop="${i}"><option value="">— ไม่ใช่ลูกค้าในระบบ / ใช้ส่วนกลางไม่ได้ —</option>${custs.map(c=>`<option ${c===cur?'selected':''}>${h(c)}</option>`).join('')}</select></div>`; }).join('')}</div>
+    </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>บันทึกการจับคู่</button></div>`);
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=async()=>{
+    const btn=$('[data-ok]',md.el); btn.disabled=true;
+    try{
+      for(const sel of $$('select[data-shop]',md.el)){
+        const shop=shops[Number(sel.dataset.shop)], v=sel.value, cur=lockCustomer(B,shop)||'';
+        const manual=B.lockMap && Object.prototype.hasOwnProperty.call(B.lockMap,shop);
+        if(v===cur && (manual || !v)) continue;
+        B.lockMap=Object.assign({}, B.lockMap, {[shop]:v});
+        const r=await call('saveLockMap',{shop, customer:v||'-'}); if(r) B.lockMap=Object.assign({}, r, {[shop]:v});
+      }
+      md.close(); abBar(B); abDraw(B); toast('บันทึกการจับคู่ร้านแล้ว');
+    }catch(e){ btn.disabled=false; fail(e); }
+  };
 }
 async function abSave(B){
   if(B.short) { toast('ยังมีสินค้าที่คงเหลือติดลบ — แก้จำนวนก่อนบันทึก', true); return; }
