@@ -441,6 +441,51 @@ body.locked .top, body.locked main, body.locked .fab, body.locked #demoBar{displ
 .badge.dup{background:rgba(139,92,246,.15);color:#7c3aed}
 .card-act{border:1px solid var(--line);background:var(--card);border-radius:8px;width:32px;height:30px;flex:none;opacity:.75}
 .card-act:hover{opacity:1;border-color:var(--red)}
+.ab-box{max-width:min(1280px,96vw)!important;width:100%}
+.ab-body{display:flex;flex-direction:column;gap:10px;min-height:0}
+.ab-bar{display:flex;gap:8px 12px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.ab-bar .t{flex:1;min-width:240px}
+.ab-err{color:var(--red);font-weight:600}
+.ab-low{color:var(--red)!important}
+.ab-neg{color:#fff;background:var(--red);border-radius:6px;padding:1px 6px}
+.ab-negtx{color:var(--red);font-size:12px;font-weight:600}
+.ab-short{flex-basis:100%}
+.ab-short:empty{display:none}
+.ab-oth{color:var(--orange);font-size:12px;margin-top:3px;cursor:help}
+.ab-wrap{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:10px}
+.ab-t{border-collapse:separate;border-spacing:0;font-size:13.5px;min-width:100%}
+.ab-t th,.ab-t td{padding:8px 10px;border-bottom:1px solid var(--line);background:var(--card);vertical-align:top}
+.ab-t thead th{position:sticky;top:0;z-index:2;background:var(--soft);font-size:12.5px;text-align:left}
+.ab-t .ab-p{position:sticky;left:0;z-index:1;min-width:230px;max-width:300px}
+.ab-t thead .ab-p{z-index:3}
+.ab-t .ab-p .nm{font-weight:600;word-break:break-word}
+.ab-t .ab-n{text-align:right;white-space:nowrap;min-width:84px}
+.ab-t .ab-po{min-width:150px}
+.ab-poh{display:flex;flex-direction:column;margin-bottom:6px}
+.ab-poh small{color:var(--muted);font-weight:400}
+.ab-t tr.neg td{background:var(--red-soft)}
+.ab-cell{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ab-cell .od{color:var(--muted);font-size:12px}
+.ab-cell.cut .al-in{opacity:.75}
+.al-in{width:84px;flex:none;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 8px;text-align:right;font-size:15px;color:var(--ink)}
+.al-in:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.al-in.chg{border-color:var(--accent);background:var(--accent-soft)}
+.al-in.over{border-color:var(--orange)}
+.ab-cell{flex-wrap:nowrap!important}
+.al-in.neg{border-color:var(--red);background:var(--red-soft);color:var(--red)}
+.ab-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+.ab-tab{flex:none;display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 10px;color:var(--ink);font-size:13px}
+.ab-tab span{color:var(--muted);font-size:12px}
+.ab-tab.on{border-color:var(--accent);background:var(--accent-soft)}
+.ab-mhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ab-list{display:grid;gap:8px}
+.ab-m{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:4px;font-size:13.5px}
+.ab-m.neg{border-color:var(--red);background:var(--red-soft)}
+.ab-m .nm{font-weight:600}
+.ab-mst{font-size:13px}
+.ab-mrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ab-mrow .ab-cell{display:inline-flex}
+.alloc-menu .am-main{border-color:var(--accent);color:var(--accent)}
 .fab-alloc{bottom:78px;background:var(--card);color:var(--accent);border:1.5px solid var(--accent)}
 .fab-alloc[hidden]{display:none}
 body:has(#btnAllocFab:not([hidden])) main{padding-bottom:150px}
@@ -1656,14 +1701,172 @@ function openAllocMenu(){
   const m=document.createElement('div'); m.id='allocMenu'; m.className='alloc-menu';
   m.innerHTML=`<div class="am-h">📦 Allocate สินค้าพร้อมส่ง<small>เลือกแล้ว ${sel.length} / ${all.length} ใบ (หัวข้อ 2. ตรวจสินค้าพร้อมส่ง)</small></div>
     <button type="button" data-am="all">${sel.length===all.length && all.length ? '☐ ยกเลิกที่เลือกทั้งหมด' : '☑ เลือกทั้งหมด ('+all.length+' ใบ)'}</button>
+    <button type="button" data-am="board" class="am-main" ${sel.length?'':'disabled'}>✏️ Allocate บนหน้าจอ (สต๊อก JST)${sel.length?' • '+sel.length+' ใบ':''}</button>
     <button type="button" data-am="out" ${sel.length?'':'disabled'}>⬇ ดึง Excel ${sel.length?'('+sel.length+' ใบที่เลือก)':'— ติ๊กเลือก P.O. ก่อน'}</button>
     <label class="am-up">⬆ อัพ Excel ที่แก้เสร็จแล้ว<input type="file" accept=".xlsx,.xls,.csv" hidden></label>`;
   document.body.appendChild(m);
   $('[data-am="all"]',m).onclick=()=>{ const on=all.length && all.every(p=>S.allocSel[p.id]); all.forEach(p=>{ if(on) delete S.allocSel[p.id]; else S.allocSel[p.id]=true; }); closeAllocMenu(); renderList(); openAllocMenu(); };
+  $('[data-am="board"]',m).onclick=()=>{ closeAllocMenu(); openAllocBoard(allocSelected()); };
   $('[data-am="out"]',m).onclick=()=>{ closeAllocMenu(); exportAllocPOs(allocSelected()).catch(fail); };
   $('input',m).onchange=e=>{ const file=e.target.files[0]; e.target.value=''; closeAllocMenu(); if(file) importAllocUpload(file).catch(fail); };
 }
 document.addEventListener('mousedown',e=>{ const m=$('#allocMenu'); if(m && !m.contains(e.target) && !e.target.closest('#btnAllocFab')) closeAllocMenu(); }, true);
+
+/* ---------- Allocate บนหน้าจอ + สต๊อก JST ----------
+   ตาราง สินค้า × P.O. ที่เลือก (มือถือ = ทีละ P.O.) • พนักงานกรอกจำนวนพร้อมส่งเอง
+   คงเหลือหลังจัด = JST พร้อมขาย − จองใน P.O. อื่น (ใส่พร้อมส่งแล้วแต่ยังไม่ตัด JST) − ที่กรอกบนหน้าจอ (เฉพาะใบที่ยังไม่ตัด JST)
+   ติดลบ = แดง + บันทึกไม่ได้ • JST พร้อมขาย < 50 = ตัวแดง (ใกล้หมด) */
+const STOCK_LOW=50;
+const ALLOC_ACTIVE=['RECEIVED','CHECKING','PICKED','READY'];
+function itemJstCut(po, it){
+  const j=jstInfo(po);
+  if(!j.multi) return !!j.rows[0].no;
+  const b=String(it.brand||'').trim().toLowerCase();
+  const r=j.rows.find(x=>x.brand.toLowerCase()===b);
+  return r ? !!r.no : j.missing.length===0;
+}
+function itemProdKey(it){
+  const m=matchItem(it), p=MATCH_OK[m.status] ? m.product : null;
+  return p && p.sku ? {key:'S:'+String(p.sku).toUpperCase(), sku:String(p.sku).toUpperCase(), name:p.name||it.name, barcode:it.barcode||(p.barcodes||[])[0]||''}
+    : {key: it.barcode ? 'B:'+it.barcode : 'N:'+String(it.name||'').trim().toLowerCase(), sku:'', name:it.name||'', barcode:it.barcode||''};
+}
+async function openAllocBoard(pos){
+  if(!pos.length){ toast('ติ๊กเลือก P.O. ก่อน', true); return; }
+  if(!S.prod){ try{ await loadProducts(); }catch(e){} }
+  const selIds=new Set(pos.map(p=>p.id));
+  // แถวสินค้า (ตามลำดับที่เจอในใบแรก ๆ) + ช่องของแต่ละ P.O.
+  const prods=[], byKey={}, cells={};          // cells[poId|line] = {po,it,key}
+  pos.forEach(po=>itemsOf(po.id).slice().sort((a,b)=>Number(a.line)-Number(b.line)).forEach(it=>{
+    const k=itemProdKey(it);
+    if(!byKey[k.key]){ byKey[k.key]=Object.assign({cells:[]}, k); prods.push(byKey[k.key]); }
+    const c={po, it, key:k.key, cut:itemJstCut(po,it)}; byKey[k.key].cells.push(c); cells[po.id+'|'+it.line]=c;
+  }));
+  // จองใน P.O. อื่น (ยังไม่ตัด JST)
+  const other={};
+  S.pos.filter(p=>!selIds.has(p.id) && ALLOC_ACTIVE.includes(p.status)).forEach(po=>itemsOf(po.id).forEach(it=>{
+    if(it.qty_ready===''||it.qty_ready==null || !Number(it.qty_ready) || itemJstCut(po,it)) return;
+    const k=itemProdKey(it).key; if(!byKey[k]) return;
+    (other[k]=other[k]||{qty:0, list:[]}); other[k].qty+=Number(it.qty_ready); other[k].list.push((po.customer||'')+' '+po.po_no+' '+num(it.qty_ready));
+  }));
+  const orig={}, val={};
+  Object.keys(cells).forEach(k=>{ const it=cells[k].it; const v=it.qty_ready===''||it.qty_ready==null ? '' : String(Number(it.qty_ready)); orig[k]=v; val[k]=v; });
+  const B={pos, prods, byKey, cells, other, orig, val, stock:null, stockErr:'', stockAt:0, tab:pos[0].id, mobile:window.matchMedia('(max-width:760px)').matches};
+  const md=openModal(`<div class="modal-head">✏️ Allocate บนหน้าจอ • ${pos.length} P.O. • ${prods.length} สินค้า</div>
+    <div class="modal-body ab-body"><div class="ab-bar" id="abBar"></div><div id="abMain"></div></div>
+    <div class="modal-foot"><span class="al-sum" id="abSum" style="flex:1"></span><button class="btn" data-x>ยกเลิก</button><button class="btn primary" id="abSave">บันทึก</button></div>`, true);
+  md.el.querySelector('.modal-box').classList.add('ab-box');
+  B.md=md;
+  const changed=()=>Object.keys(val).filter(k=>val[k]!==orig[k]);
+  const close=async()=>{ if(changed().length && !await confirmBox('ปิดหน้านี้','ยังไม่ได้บันทึกจำนวนที่แก้ '+changed().length+' ช่อง — ปิดโดยไม่บันทึก?','ปิดไม่บันทึก',true)) return; md.close(); };
+  $('[data-x]',md.el).onclick=close; const mx=$('.modal-x',md.el); if(mx) mx.onclick=close;
+  $('#abSave',md.el).onclick=()=>abSave(B);
+  abDraw(B);
+  abLoadStock(B);
+}
+async function abLoadStock(B){
+  const skus=B.prods.filter(p=>p.sku).map(p=>p.sku);
+  B.stock=null; B.stockErr=''; abBar(B);
+  if(!skus.length){ B.stockErr='ไม่มีสินค้าที่จับคู่ SKU ของ JST ได้'; abBar(B); abUpdate(B); return; }
+  try{ const r=await call('jstStock',{skus}); B.stock=r.rows||{}; B.stockAt=r.at||Date.now(); }
+  catch(e){ B.stockErr = /ไม่รู้จักคำสั่ง/.test(e.message) ? 'ต้องอัปเดต Code.gs เป็น 1.7.0 ก่อน จึงจะดึงสต๊อก JST ได้' : 'ดึงสต๊อก JST ไม่ได้: '+e.message; }
+  abBar(B); abDraw(B);
+}
+function abCalc(B, p){
+  const st=p.sku && B.stock ? B.stock[p.sku] : null;
+  const typed=p.cells.reduce((a,c)=>a+(c.cut?0:(Number(B.val[c.po.id+'|'+c.it.line])||0)),0);
+  const oth=(B.other[p.key]||{}).qty||0;
+  const avail = st ? st.available : null;
+  return {st, avail, typed, oth, left: avail==null ? null : avail-oth-typed, ordered:p.cells.reduce((a,c)=>a+(Number(c.it.qty)||0),0)};
+}
+function abBar(B){
+  const el=$('#abBar',B.md.el); if(!el) return;
+  const t=B.stockAt ? new Date(B.stockAt).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}) : '';
+  el.innerHTML = `<span class="t">${B.stock ? 'สต๊อก JST (พร้อมขาย) ดึงเมื่อ <b>'+t+' น.</b>' : B.stockErr ? '<span class="ab-err">⚠ '+h(B.stockErr)+'</span>' : '<span class="spin"></span> กำลังดึงสต๊อกจาก JST…'}
+      • คงเหลือ = JST พร้อมขาย − จองใน P.O. อื่น − ที่กรอก • <span class="ab-low">ตัวแดง</span> = เหลือน้อยกว่า ${STOCK_LOW}</span>
+    <span class="ab-short" id="abShort"></span><button class="btn sm" id="abReload">⟳ ดึงสต๊อกใหม่</button>`;
+  $('#abReload',el).onclick=()=>abLoadStock(B);
+}
+function abStockCell(B,p,c){
+  if(!p.sku) return '<span class="ref">ไม่พบใน JST</span>';
+  if(!B.stock) return B.stockErr ? '<span class="ref">-</span>' : '<span class="ref">…</span>';
+  if(!c.st) return '<span class="ref">ไม่พบ SKU นี้ใน JST</span>';
+  return `<b class="${c.avail<STOCK_LOW?'ab-low':''}">${num(c.avail)}</b>`;
+}
+function abLeftCell(B,c){
+  if(c.left==null) return '<span class="ref">-</span>';
+  const msg = c.left>=0 ? '' : c.typed>0 ? '⚠ ของไม่พอ ขาด '+num(-c.left) : '⚠ P.O. อื่นจองเกินสต๊อกอยู่แล้ว '+num(-c.left);
+  return `<b class="${c.left<0?'ab-neg':c.left<STOCK_LOW?'ab-low':''}">${num(c.left)}</b>${msg?`<div class="ab-negtx">${msg}</div>`:''}`;
+}
+function abOtherTx(B,p){
+  const o=B.other[p.key]; if(!o) return '';
+  return `<div class="ab-oth" title="${h(o.list.join('\n'))}">⚠ จองใน P.O. อื่น (ยังไม่ตัดในระบบ JST) ${num(o.qty)}</div>`;
+}
+function abInput(B,c){
+  const k=c.po.id+'|'+c.it.line;
+  return `<div class="ab-cell${c.cut?' cut':''}"><input class="al-in" type="number" inputmode="numeric" min="0" data-k="${h(k)}" value="${h(B.val[k])}" placeholder="-"><span class="od">/${num(c.it.qty)}</span>${c.cut?'<div class="ref">ตัด JST แล้ว</div>':''}</div>`;
+}
+function abDraw(B){
+  const el=$('#abMain',B.md.el); if(!el) return;
+  B.mobile=window.matchMedia('(max-width:760px)').matches;
+  const due=po=>po.due_date?'ส่ง '+thDate(po.due_date,true):'ไม่มีกำหนดส่ง';
+  if(!B.mobile){
+    el.innerHTML=`<div class="ab-wrap"><table class="ab-t"><thead><tr><th class="ab-p">สินค้า</th><th class="ab-n">JST<br>พร้อมขาย</th><th class="ab-n">คงเหลือ<br>หลังจัด</th>
+      ${B.pos.map(po=>`<th class="ab-po"><div class="ab-poh"><b>${h(po.customer||'-')}</b><span>${h(po.po_no)}</span><small>${h(due(po))}</small></div>
+        <button class="btn sm" data-fill="${h(po.id)}">✓ พร้อมส่งทั้งใบ</button></th>`).join('')}</tr></thead>
+      <tbody>${B.prods.map((p,i)=>{ const c=abCalc(B,p); return `<tr data-p="${i}">
+        <td class="ab-p"><div class="nm">${h(p.name)}</div><div class="ref">${h(p.sku||p.barcode||'')}</div>${abOtherTx(B,p)}</td>
+        <td class="ab-n">${abStockCell(B,p,c)}</td><td class="ab-n ab-left">${abLeftCell(B,c)}</td>
+        ${B.pos.map(po=>{ const cc=p.cells.find(x=>x.po.id===po.id); return `<td class="ab-c">${cc?abInput(B,cc):'<span class="ref">–</span>'}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+  } else {
+    const po=B.pos.find(x=>x.id===B.tab)||B.pos[0];
+    el.innerHTML=`<div class="ab-tabs">${B.pos.map(x=>`<button class="ab-tab ${x.id===po.id?'on':''}" data-tab="${h(x.id)}"><b>${h(x.customer||'-')}</b><span>${h(x.po_no)}</span></button>`).join('')}</div>
+      <div class="ab-mhead"><span class="ref">${h(due(po))}</span><button class="btn sm" data-fill="${h(po.id)}">✓ พร้อมส่งทั้งใบ</button></div>
+      <div class="ab-list">${B.prods.map((p,i)=>{ const cc=p.cells.find(x=>x.po.id===po.id); if(!cc) return ''; const c=abCalc(B,p); return `<div class="ab-m" data-p="${i}">
+        <div class="nm">${h(p.name)}</div><div class="ref">${h(p.sku||p.barcode||'')}</div>
+        <div class="ab-mst">JST ${abStockCell(B,p,c)} • คงเหลือ <span class="ab-left">${abLeftCell(B,c)}</span></div>${abOtherTx(B,p)}
+        <div class="ab-mrow"><span>สั่ง ${num(cc.it.qty)}</span><span>พร้อมส่ง ${abInput(B,cc)}</span></div></div>`; }).join('')}</div>`;
+    $$('[data-tab]',el).forEach(b=>b.onclick=()=>{ B.tab=b.dataset.tab; abDraw(B); });
+  }
+  $$('input[data-k]',el).forEach(inp=>inp.oninput=()=>{ const v=inp.value.trim(); B.val[inp.dataset.k]= v==='' ? '' : String(Math.max(0, Math.floor(Number(v)||0))); abUpdate(B); });
+  $$('[data-fill]',el).forEach(b=>b.onclick=()=>{ const id=b.dataset.fill;
+    Object.keys(B.cells).forEach(k=>{ if(B.cells[k].po.id===id) B.val[k]=String(Number(B.cells[k].it.qty)||0); });
+    abDraw(B); const po=B.pos.find(x=>x.id===id); toast('ใส่พร้อมส่งเต็มยอดสั่งทั้งใบแล้ว: '+(po?po.po_no:'')); });
+  abUpdate(B);
+}
+function abUpdate(B){
+  const el=B.md.el; let short=0;
+  B.prods.forEach((p,i)=>{
+    // บล็อกเฉพาะสินค้าที่หน้านี้กรอกจำนวนเพิ่ม (ถ้าติดลบเพราะ P.O. อื่นจองไว้อย่างเดียว ใส่ 0 ที่นี่แล้วบันทึกได้)
+    const c=abCalc(B,p); if(c.left!=null && c.left<0 && c.typed>0) short++;
+    $$(`[data-p="${i}"]`,el).forEach(row=>{ const L=$('.ab-left',row); if(L) L.innerHTML=abLeftCell(B,c); row.classList.toggle('neg', c.left!=null && c.left<0); });
+  });
+  $$('input[data-k]',el).forEach(inp=>{ const k=inp.dataset.k, c=B.cells[k], v=B.val[k];
+    if(document.activeElement!==inp) inp.value=v;
+    inp.classList.toggle('chg', v!==B.orig[k]); inp.classList.toggle('over', v!=='' && Number(v)>Number(c.it.qty));
+    const p=B.byKey[c.key], cc=abCalc(B,p); inp.classList.toggle('neg', !c.cut && v!=='' && Number(v)>0 && cc.left!=null && cc.left<0); });
+  const ch=Object.keys(B.val).filter(k=>B.val[k]!==B.orig[k]), npo=new Set(ch.map(k=>k.split('|')[0])).size;
+  const sh=$('#abShort',el); if(sh) sh.innerHTML = short ? `<span class="ab-negtx">⚠ ของไม่พอ ${short} รายการ — แก้ให้คงเหลือไม่ติดลบก่อนบันทึก</span>` : '';
+  $('#abSum',el).textContent = ch.length ? 'แก้ '+ch.length+' ช่อง ใน '+npo+' P.O.' : 'ยังไม่มีการเปลี่ยนแปลง';
+  const sv=$('#abSave',el); sv.disabled = !ch.length || short>0;
+  sv.textContent = short ? '⛔ คงเหลือติดลบ' : ch.length ? '✓ บันทึก '+npo+' P.O.' : 'บันทึก';
+  B.short=short;
+}
+async function abSave(B){
+  if(B.short) { toast('ยังมีสินค้าที่คงเหลือติดลบ — แก้จำนวนก่อนบันทึก', true); return; }
+  const ch=Object.keys(B.val).filter(k=>B.val[k]!==B.orig[k]); if(!ch.length) return;
+  if(!B.stock && !await confirmBox('ยังไม่มีสต๊อก JST', 'ระบบยังดึงสต๊อก JST ไม่ได้ จึงตรวจของไม่พอให้ไม่ได้ — บันทึกต่อหรือไม่?', 'บันทึกต่อ')) return;
+  const byPo={}; ch.forEach(k=>{ const c=B.cells[k]; (byPo[c.po.id]=byPo[c.po.id]||[]).push({line:c.it.line, qty_ready:B.val[k]}); });
+  const btn=$('#abSave',B.md.el); btn.disabled=true;
+  const ids=Object.keys(byPo); let ok=0; const bad=[];
+  for(const id of ids){
+    btn.textContent='กำลังบันทึก '+(ok+bad.length+1)+'/'+ids.length+'…';
+    try{ const items=await call('updateItems',{id, items:byPo[id]}); syncItems(id, items); ok++; byPo[id].forEach(u=>{ B.orig[id+'|'+u.line]=u.qty_ready; }); }
+    catch(e){ const po=B.pos.find(x=>x.id===id); bad.push((po?po.po_no:id)+': '+e.message); }
+  }
+  render();
+  if(bad.length){ toast('บันทึกได้ '+ok+'/'+ids.length+' P.O. — ไม่สำเร็จ: '+bad.join(', '), true); abUpdate(B); return; }
+  B.md.close(); toast('บันทึกจำนวนพร้อมส่งแล้ว '+ok+' P.O.');
+}
 
 const ALLOC_NOTE='หมายเหตุ/วันหมดอายุ';
 const ALLOC_HEAD=['รหัสระบบ','ลูกค้า','เลข P.O.','กำหนดส่ง','ลำดับ','บาร์โค้ด','SKU','แบรนด์','ชื่อสินค้า','จำนวนสั่ง','จำนวนพร้อมส่ง',ALLOC_NOTE];
