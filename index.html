@@ -3129,7 +3129,20 @@ function joinSplitCodes(items){
   });
   return items.filter(t=>!used.has(t) || t.joined);
 }
-function normThai(s){ return String(s).replace(/ํา/g,'ำ').replace(/ /g,' '); }
+/** ตัวเลขใต้รูปบาร์โค้ดบางเจ้า (เช่น OR) ฝังฟอนต์ที่เก็บตัวเลข 2 ตัวต่อ 1 อักขระ → pdf.js อ่านเป็นอักษรจีน เช่น "㐵㠹㔴…"
+ *  (U+3435 = "4","5") แปลงกลับเป็นตัวเลข — เฉพาะชุดอักขระที่ทุกตัวเป็นคู่ตัวเลขล้วน */
+function unpackDigits(s){
+  return s.replace(/[　-㧿]{4,}/g, run=>{
+    let out='';
+    for(const ch of run){
+      const c=ch.charCodeAt(0), hi=c>>8, lo=c&255;
+      if(hi<0x30 || hi>0x39 || !((lo>=0x30 && lo<=0x39) || lo===0)) return run;
+      out+=String.fromCharCode(hi)+(lo?String.fromCharCode(lo):'');
+    }
+    return out;
+  });
+}
+function normThai(s){ return unpackDigits(String(s)).replace(/ํา/g,'ำ').replace(/ /g,' '); }
 function lineNumbers(str){
   return str.split(' ').filter(w=>/^\d{1,3}(,\d{3})+(\.\d+)?$|^\d+(\.\d+)?$/.test(w)).map(w=>Number(w.replace(/,/g,'')));
 }
