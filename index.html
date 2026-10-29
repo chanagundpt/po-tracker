@@ -1424,8 +1424,9 @@ function blCard(o){
   </div>`;
 }
 
-function filteredPos(){
-  const f=S.filter, t=S.today, w=addDays(t,warnDays());
+/** skip = ชื่อตัวกรองที่ไม่ต้องใช้ (ใช้นับจำนวนในดรอปดาวน์ลูกค้า/แบรนด์ ตามตัวกรองอื่นที่เลือกอยู่) */
+function filteredPos(skip){
+  const f=Object.assign({}, S.filter, skip ? {[skip]:''} : {}), t=S.today, w=addDays(t,warnDays());
   const q=f.q.trim().toLowerCase();
   let list = S.pos.filter(po=>{
     if(f.status==='OPEN' && isClosed(po)) return false;
@@ -1496,8 +1497,8 @@ function renderList(){
   $$('.kpi').forEach(b=>b.onclick=()=>{ f.due=b.dataset.due; if(f.due||f.status!=='ALL') f.status='OPEN'; renderList(); });
   $$('.chip').forEach(b=>b.onclick=()=>{ f.status=b.dataset.st; f.due=''; renderList(); });
   const q=$('#q'); q.oninput=()=>{ f.q=q.value; clearTimeout(q._t); q._t=setTimeout(()=>{ renderList(); const n=$('#q'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
-  $('#fCust').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกลูกค้า', opts:customerOpts('ลูกค้าทั้งหมด'), cur:f.customer, onPick:v=>{ f.customer=v; renderList(); }});
-  $('#fBrand').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกแบรนด์', opts:brandOpts('แบรนด์ทั้งหมด'), cur:f.brand||'', onPick:v=>{ f.brand=v; renderList(); }});
+  $('#fCust').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกลูกค้า', opts:customerOpts('ลูกค้าทั้งหมด', filteredPos('customer')), cur:f.customer, onPick:v=>{ f.customer=v; renderList(); }});
+  $('#fBrand').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกแบรนด์', opts:brandOpts('แบรนด์ทั้งหมด', filteredPos('brand')), cur:f.brand||'', onPick:v=>{ f.brand=v; renderList(); }});
   $('#fSort').onclick=e=>ddToggle(e.currentTarget,{title:'เรียงลำดับ', opts:SORTS, cur:f.sort, search:false, onPick:v=>{ f.sort=v; renderList(); }});
   $$('.card').forEach(c=>c.onclick=()=>openDetail(c.dataset.id));
   $$('.card [data-ack]').forEach(l=>{ l.onclick=e=>e.stopPropagation();
@@ -3368,9 +3369,9 @@ function openDd(btn, {title, opts, cur, onPick, search}){
   back.onclick=closeDd;
 }
 /** แบรนด์ทั้งหมด = รายชื่อในหน้า ⚙ + แบรนด์ใน P.O./รายการสินค้า พร้อมจำนวนใบ */
-function brandOpts(allLabel){
+function brandOpts(allLabel, pos){
   const cnt={}, name={};
-  S.pos.forEach(p=>{ if(p.status==='DELETED') return; poBrands(p).forEach(b=>{ const k=b.toLowerCase(); name[k]=name[k]||b; cnt[k]=(cnt[k]||0)+1; }); });
+  (pos||S.pos.filter(p=>p.status!=='DELETED')).forEach(p=>{ poBrands(p).forEach(b=>{ const k=b.toLowerCase(); name[k]=name[k]||b; cnt[k]=(cnt[k]||0)+1; }); });
   (S.lists.brands||[]).forEach(b=>{ const k=String(b).trim().toLowerCase(); if(k && !name[k]) name[k]=String(b).trim(); });
   const keys=Object.keys(name).sort((a,b)=>name[a].localeCompare(name[b],'th'));
   return [{value:'', label:allLabel}].concat(keys.map(k=>({value:name[k], label:name[k], n:(cnt[k]||0)+' ใบ'})));
@@ -3381,7 +3382,8 @@ window.addEventListener('resize',()=>{ if(DD && !ddMobile()) closeDd(); });
 window.addEventListener('scroll',e=>{ if(DD && !DD.pop.contains(e.target) && !ddMobile()) closeDd(); }, true);
 /** ลูกค้าทั้งหมด = รายชื่อในหน้า ⚙ + ลูกค้าที่มีใน P.O. พร้อมจำนวนใบ */
 function customerOpts(allLabel, pos){
-  const cnt={}; (pos||S.pos).forEach(p=>{ if(p.status!=='DELETED' && p.customer) cnt[p.customer]=(cnt[p.customer]||0)+1; });
+  // นับจากรายการที่ส่งมา (ตามตัวกรองที่เลือกอยู่) — ไม่ส่งมา = ทุกใบที่ยังไม่ถูกลบ
+  const cnt={}; (pos||S.pos.filter(p=>p.status!=='DELETED')).forEach(p=>{ if(p.customer) cnt[p.customer]=(cnt[p.customer]||0)+1; });
   const names=[...new Set((S.lists.customers||[]).concat(Object.keys(cnt)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th'));
   return [{value:'', label:allLabel}].concat(names.map(n=>({value:n, label:n, n:(cnt[n]||0)+' ใบ'})));
 }
