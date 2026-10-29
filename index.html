@@ -146,6 +146,9 @@ body.view-blogger .fab{display:none}
 .rv-doc .pg{box-shadow:0 1px 4px rgba(0,0,0,.3);max-width:100%}
 .rv-foot{flex-wrap:wrap}
 @media (max-width:640px){ .rv-foot .btn{flex:1 1 auto} .rv-foot [data-later]{order:3;flex-basis:100%} .rv-doc{max-height:45vh} }
+.sum-tg{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}
+.sum-tg input{width:18px;height:18px;accent-color:var(--accent)}
+.pick-bar .sum-tg{flex:none}
 .doc-tg{display:flex;align-items:center;gap:6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;margin-right:4px}
 .doc-tg input{width:18px;height:18px;accent-color:var(--accent)}
 @media (max-width:640px){ .doc-tg span{white-space:normal;line-height:1.2;font-size:12px;max-width:120px} }
@@ -1576,6 +1579,7 @@ function renderSummary(){
     <div class="pick-bar">
       <span class="t">เลือก <b>${sel.length}</b>/${pos.length} ใบ • ${selRows.length} รายการ • จัดส่งได้ ${num(sumQty(selRows,'pick'))} ชิ้น</span>
       <button class="btn sm" id="pkAll">${sel.length===pos.length && pos.length?'ยกเลิกทั้งหมด':'เลือกทั้งหมด'}</button>
+      ${pickSumToggle(sel.length)}
       <button class="btn sm" id="pkXls">⬇ Excel</button>
       <button class="btn sm primary" id="pkPrint">🖨 พิมพ์ / PDF</button>
     </div>`;
@@ -1586,6 +1590,7 @@ function renderSummary(){
   $('#pkAll').onclick=()=>{ const all=sel.length===pos.length; S.pickSel={}; if(!all) pos.forEach(p=>S.pickSel[p.id]=true); renderSummary(); };
   $('#pkXls').onclick=()=>exportPickExcel();
   $('#pkPrint').onclick=()=>printPickList();
+  bindPickSumToggle($('#content'));
 }
 /** ใบจัดสินค้าของ P.O. เดียว (เปิดจากหน้า P.O. ขั้น "กำลังจัดเตรียมสินค้า") */
 function openPoPick(po){
@@ -1597,9 +1602,11 @@ function openPoPick(po){
       <tr class="tot"><td colspan="4">รวม ${rows.length} รายการ</td><td class="r">${num(total)}</td><td class="r">${num(totalPick)}</td><td></td></tr></table></div>`
       : '<div class="empty" style="padding:12px">ยังไม่มีรายการสินค้า</div>'}
   </div><div class="modal-foot"><button class="btn" data-all>รวมกับ P.O. อื่น →</button><span style="flex:1"></span>
+    ${pickSumToggle(1)}
     <button class="btn" data-x>ปิด</button><button class="btn" data-xls>⬇ Excel</button><button class="btn primary" data-print>🖨 พิมพ์ / PDF</button></div>`, true);
   $('[data-x]',md.el).onclick=()=>md.close();
   $('[data-print]',md.el).onclick=()=>printPickList([po]);
+  bindPickSumToggle(md.el);
   $('[data-xls]',md.el).onclick=()=>exportPickExcel([po]);
   $('[data-all]',md.el).onclick=()=>{
     md.close(); S.pickSel=S.pickSel||{}; S.pickSel[po.id]=true; S.pickMode='po';
@@ -2061,6 +2068,10 @@ async function exportPickExcel(only){
     else { const md=openModal(`<div class="modal-head">ไฟล์ Excel พร้อมแล้ว</div><div class="modal-body"><a class="btn primary" href="${h(r.url)}" target="_blank" rel="noopener">⬇ ดาวน์โหลด ${h(name)}</a></div><div class="modal-foot"><button class="btn" data-x>ปิด</button></div>`); $('[data-x]',md.el).onclick=()=>md.close(); }
   }catch(e){ if(win) win.close(); fail(e); }
 }
+/** ตั้งค่า "พิมพ์ตารางรวมจำนวนหยิบ" (จำในเครื่อง; ยังไม่เคยเลือก = แสดงเมื่อหลาย P.O.) */
+function pickSumOn(n){ try{ const v=localStorage.getItem('pt.pickSum'); if(v!==null) return v==='1'; }catch(e){} return n>1; }
+function pickSumToggle(n){ return `<label class="sum-tg"><input type="checkbox" data-sumtg ${pickSumOn(n)?'checked':''}> พิมพ์ตาราง “รวมจำนวนหยิบ” ด้วย</label>`; }
+function bindPickSumToggle(el){ const c=$('[data-sumtg]',el); if(c) c.onchange=()=>{ try{ localStorage.setItem('pt.pickSum', c.checked?'1':'0'); }catch(e){} }; }
 function printPickList(only){
   const d=only ? {pos:only, agg:pickAggregate(only)} : pickSelection(); if(!d) return;
   const esc=h, now=new Date();
@@ -2083,8 +2094,7 @@ function printPickList(only){
     ${pickRows(po).map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}</td><td>${pickCellPrint(r)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('')}
     <tr class="tot"><td colspan="3">รวม ${pickRows(po).length} รายการ</td><td>${num(sumQty(pickRows(po),'pick'))}</td><td colspan="2"></td></tr></table></div>`).join('');
   // ตาราง "รวมจำนวนหยิบ" เลือกแสดงได้ (บางคนต้องการแค่แยกตาม P.O.) — จำค่าที่เลือกไว้ในเครื่อง; ไม่เคยเลือก = แสดงเมื่อมีหลาย P.O.
-  let showSum = d.pos.length>1;
-  try{ const v=localStorage.getItem('pt.pickSum'); if(v!==null) showSum = v==='1'; }catch(e){}
+  let showSum = pickSumOn(d.pos.length);
   const sign='<div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>';
   const bodyOf=on=>head+(on?sum:'')+per+sign;
   const htmlOf=on=>`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบจัดสินค้า ${S.today}</title>
