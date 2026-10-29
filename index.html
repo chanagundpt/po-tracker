@@ -911,6 +911,14 @@ const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
 };
+/* ---------- เก็บข้อมูลชุดล่าสุดไว้ในเครื่อง → เปิดแอปแล้วเห็นทันที แล้วค่อยอัปเดตจากเซิร์ฟเวอร์ตามหลัง ----------
+   แยกตามบัญชี (ชื่อผู้ใช้) • ลบเมื่อออกจากระบบ • ไม่ใช้ข้อมูลนี้บันทึกอะไร (ทุกการบันทึกส่งไปเซิร์ฟเวอร์ตามปกติ) */
+const LC = {
+  key(){ const u=(S.me && S.me.username) || store.get('po.cacheUser') || ''; return u ? 'po.cache.'+u.toLowerCase() : ''; },
+  get(){ try{ const k=LC.key(); if(!k) return null; const v=JSON.parse(localStorage.getItem(k)||'null'); return v && v.at && Date.now()-v.at < 3*864e5 ? v : null; }catch(e){ return null; } },
+  put(me, list){ try{ if(!me || !me.me) return; store.set('po.cacheUser', me.me.username); localStorage.setItem('po.cache.'+me.me.username.toLowerCase(), JSON.stringify({at:Date.now(), me, list})); }catch(e){ /* เต็ม → ไม่เก็บ */ } },
+  clear(){ try{ Object.keys(localStorage).filter(k=>/^po\.cache\.|^po\.prod$/.test(k)).forEach(k=>localStorage.removeItem(k)); localStorage.removeItem('po.cacheUser'); }catch(e){} },
+};
 const S = {
   user: '', me: null,
   token: store.get('po.token') || sessGet('po.token') || '',
@@ -1064,19 +1072,52 @@ async function boot(){
   if(S.token){ try{ return await startApp(await call('me')); }catch(e){ /* token หมดอายุ → หน้าเข้าสู่ระบบ */ } }
   showLogin();
 }
+/** เปิดแอปเมื่อมี token: แสดงข้อมูลในเครื่องทันที → เรียก start ครั้งเดียว (ข้อมูลผู้ใช้ + รายการ P.O.) → แสดงของจริง */
+async function bootFast(){
+  if(MODE==='demo') $('#demoBar').classList.remove('hidden');
+  bindTop();
+  const cached=LC.get();
+  if(cached){ await startApp(cached.me, cached.list, true); showStale(true); }
+  else document.body.classList.add('locked');
+  try{
+    const d=await call('start', {});
+    showStale(false);
+    LC.put(d, d.list);
+    if(cached){ applyStart(d); applyList(d.list, true); }
+    else await startApp(d, d.list);
+  }catch(e){
+    showStale(false);
+    if(/AUTH_REQUIRED|เข้าสู่ระบบ/.test(e.message)){ LC.clear(); S.me=null; S.pos=[]; S.items=[]; return; }   // call() แสดงหน้าเข้าสู่ระบบให้แล้ว
+    if(/ไม่รู้จักคำสั่ง/.test(e.message)) return cached ? load(true) : boot();      // เซิร์ฟเวอร์รุ่นเก่า
+    if(cached) toast('เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — ข้อมูลที่เห็นอาจยังไม่ล่าสุด', true);
+    else return boot();
+  }
+}
+function showStale(on){
+  let el=$('#staleDot');
+  if(!el){ el=document.createElement('div'); el.id='staleDot'; el.className='saving'; document.body.appendChild(el); }
+  el.textContent='⟳ กำลังอัปเดตข้อมูลล่าสุด…'; el.classList.toggle('show', !!on); el.classList.remove('done');
+}
 
 let REFRESH_T=null;
-async function startApp(d){
+function applyStart(d){
   S.me=d.me; S.user=d.me.name || d.me.username; S.boot=d;
   if(d.lists) S.lists=d.lists;
   if(d.today) S.today=d.today;
-  $('#ver').textContent='v'+d.version;
+  if(d.version) S.version=d.version;
+  $('#ver').textContent='v'+(d.version||S.version||'');
   renderUser();
+}
+async function startApp(d, list, fromCache){
+  applyStart(d);
   const lg=$('#login'); if(lg) lg.remove();
   document.body.classList.remove('locked');
   loadProducts();
-  try{ await load(); }
-  catch(e){ $('#content').innerHTML=`<div class="empty">โหลดข้อมูลไม่สำเร็จ<br><small>${h(e.message)}</small></div>`; }
+  if(list){ applyList(list, false, fromCache); }
+  else {
+    try{ await load(); }
+    catch(e){ $('#content').innerHTML=`<div class="empty">โหลดข้อมูลไม่สำเร็จ<br><small>${h(e.message)}</small></div>`; }
+  }
   if(!REFRESH_T) REFRESH_T=setInterval(()=>{ if(S.me && document.visibilityState==='visible' && !$('.modal') && !$('.overlay')) load(true); }, 90000);
 }
 function renderUser(){ $('#userName').textContent = S.user; }
@@ -1152,7 +1193,7 @@ function openUserMenu(){
 }
 async function logout(){
   try{ await call('logout'); }catch(e){}
-  clearToken(); S.pos=[]; S.items=[]; showLogin(); toast('ออกจากระบบแล้ว');
+  clearToken(); LC.clear(); S.pos=[]; S.items=[]; S.prod=null; showLogin(); toast('ออกจากระบบแล้ว');
 }
 function openChangePassword(){
   const md=openModal(`<div class="modal-head">เปลี่ยนรหัสผ่าน</div><div class="modal-body">
@@ -1230,11 +1271,18 @@ function openUserForm(u){
 async function load(silent){
   try{
     const d = await call('list', {});
-    if(silent && PENDING) return;                       // ยังบันทึกไม่ครบ — รอรอบหน้า
-    S.pos = d.pos; S.items = d.items; if(d.today) S.today=d.today; if(d.lists) S.lists=d.lists;
-    if(silent) renderWhenIdle(render); else render();
-    setTimeout(runScreening, 2500); setTimeout(maybeAskReview, 4000);
+    applyList(d, silent);
   }catch(e){ if(!silent) fail(e); }
+}
+/** ใส่รายการ P.O. ที่ได้จากเซิร์ฟเวอร์ (หรือจากเครื่อง) แล้ววาดหน้า */
+function applyList(d, silent, fromCache){
+  if(!d) return;
+  if(silent && PENDING) return;                         // ยังบันทึกไม่ครบ — รอรอบหน้า
+  S.pos = d.pos; S.items = d.items; if(d.today) S.today=d.today; if(d.lists) S.lists=d.lists;
+  if(silent) renderWhenIdle(render); else render();
+  if(fromCache) return;                                 // ข้อมูลในเครื่อง: ยังไม่ตรวจไฟล์/ไม่ถาม รอข้อมูลจริง
+  if(S.boot) LC.put(S.boot, d);
+  setTimeout(runScreening, 2500); setTimeout(maybeAskReview, 4000);
 }
 
 function bindTop(){
@@ -2268,9 +2316,14 @@ function tlHtml(log){
 async function refreshDetail(){
   if(!S.detail) return;
   const id=S.detail.po.id;
-  const d=await call('get',{id});
+  const hadLog=Array.isArray(S.detail.log);
+  const d=await call('get',{id, recentLog:hadLog});
   if(!S.detail || S.detail.po.id!==id) return;
   if(PENDING) return;                                   // ยังมีงานรอบันทึก — ข้อมูลจากเซิร์ฟเวอร์อาจยังไม่ล่าสุด
+  if(d.partialLog){                                     // ได้แค่ประวัติล่าสุด → รวมกับที่มีอยู่
+    const seen=new Set(), all=(d.log||[]).concat(S.detail.log||[]).filter(l=>{ const k=l.ts+'|'+l.action+'|'+l.detail; if(seen.has(k)) return false; seen.add(k); return true; });
+    d.log=all.sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+  }
   const sig=x=>JSON.stringify([x.po, (x.items||[]).map(i=>[i.line,i.barcode,i.name,i.brand,i.qty,i.qty_ready,i.item_note,i.jst_sku,i.unit_note])]);
   const same = sig(S.detail)===sig(d);
   S.detail=Object.assign({}, S.detail, {po:d.po, items:d.items, log:d.log}); syncPo(d.po); syncItems(id,d.items);
@@ -2780,9 +2833,15 @@ function nameTokens(s){ return normName(s).split(' ').filter(t=>t.length>=2); }
 function itemKey(it){ return it.barcode ? String(it.barcode).trim().toUpperCase() : 'NAME:'+normName(it.name).toUpperCase(); }
 
 async function loadProducts(){
-  try{ indexProducts(await call('products')); }
-  catch(e){ console.warn(e); S.prod={configured:false, message:e.message, list:[], extra:[], byCode:{}, bySku:{}, extraByCode:{}}; }
-  if(S.detail) renderDetail(); else if(S.view==='summary') renderSummary();
+  let had=false;
+  if(!S.prod){ try{ const c=JSON.parse(localStorage.getItem('po.prod')||'null'); if(c && c.data && Date.now()-c.at < 864e5){ indexProducts(c.data); had=true; } }catch(e){} }
+  try{
+    const d=await call('products');
+    indexProducts(d);
+    if(d && d.configured){ try{ localStorage.setItem('po.prod', JSON.stringify({at:Date.now(), data:d})); }catch(e){ /* เต็ม → ไม่เก็บ */ } }
+  }catch(e){ console.warn(e); if(!had && !S.prod) S.prod={configured:false, message:e.message, list:[], extra:[], byCode:{}, bySku:{}, extraByCode:{}}; }
+  const redraw=()=>{ if(S.detail) renderDetail(); else if(S.view==='summary') renderSummary(); };
+  if(had) renderWhenIdle(redraw); else redraw();
 }
 function indexProducts(d){
   const P={configured:!!d.configured, message:d.message||'', list:d.products||[], extra:d.extra||[], byCode:{}, bySku:{}, extraByCode:{}};
@@ -3523,7 +3582,7 @@ function guessQty(n){
  * ========================================================= */
 const Demo = { call(){ return Promise.resolve({ok:false, error:'ยังไม่ได้ตั้งค่า API_URL'}); } };
 
-boot();
+if(S.token) bootFast(); else boot();
 </script>
 </body>
 </html>
