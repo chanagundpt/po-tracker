@@ -146,6 +146,9 @@ body.view-blogger .fab{display:none}
 .rv-doc .pg{box-shadow:0 1px 4px rgba(0,0,0,.3);max-width:100%}
 .rv-foot{flex-wrap:wrap}
 @media (max-width:640px){ .rv-foot .btn{flex:1 1 auto} .rv-foot [data-later]{order:3;flex-basis:100%} .rv-doc{max-height:45vh} }
+.doc-tg{display:flex;align-items:center;gap:6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;margin-right:4px}
+.doc-tg input{width:18px;height:18px;accent-color:var(--accent)}
+@media (max-width:640px){ .doc-tg span{white-space:normal;line-height:1.2;font-size:12px;max-width:120px} }
 .pill-notpo{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
 .panel.review.notpo{border-color:var(--red);background:var(--red-soft)}
 .tags-end{margin-left:auto;display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
@@ -2079,10 +2082,14 @@ function printPickList(only){
     <table><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th><th>หมายเหตุ</th><th class="ck">✓</th></tr>
     ${pickRows(po).map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}</td><td>${pickCellPrint(r)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('')}
     <tr class="tot"><td colspan="3">รวม ${pickRows(po).length} รายการ</td><td>${num(sumQty(pickRows(po),'pick'))}</td><td colspan="2"></td></tr></table></div>`).join('');
-  const html=`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบจัดสินค้า ${S.today}</title>
+  // ตาราง "รวมจำนวนหยิบ" เลือกแสดงได้ (บางคนต้องการแค่แยกตาม P.O.) — จำค่าที่เลือกไว้ในเครื่อง; ไม่เคยเลือก = แสดงเมื่อมีหลาย P.O.
+  let showSum = d.pos.length>1;
+  try{ const v=localStorage.getItem('pt.pickSum'); if(v!==null) showSum = v==='1'; }catch(e){}
+  const sign='<div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>';
+  const bodyOf=on=>head+(on?sum:'')+per+sign;
+  const htmlOf=on=>`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบจัดสินค้า ${S.today}</title>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet"><style>${css}</style></head>
-    <body>${head}${sum}${per}
-    <div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div></body></html>`;
+    <body>${bodyOf(on)}</body></html>`;
   // ชุดสำหรับพิมพ์จริง: ใส่เอกสารลงหน้าหลัก แล้วซ่อนส่วนอื่นตอนพิมพ์ (ได้ A4 เต็มแผ่น)
   const pcss=`#printArea{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;background:#fff;line-height:1.4}
     #printArea h1{font-size:18px;margin:0;color:#111}#printArea h2{font-size:14px;margin:18px 0 6px;color:#111}#printArea .sub{color:#555;margin:2px 0 10px}
@@ -2092,11 +2099,13 @@ function printPickList(only){
     #printArea .po{break-inside:avoid;page-break-inside:avoid;margin-bottom:12px}#printArea tr{break-inside:avoid;page-break-inside:avoid}
     #printArea .ref{color:#666;font-size:10px}#printArea .zero{color:#c00}
     #printArea .sign{display:flex;gap:40px;margin-top:24px}#printArea .sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}`;
-  showDocView(html, 'ใบจัดสินค้า • '+d.pos.length+' P.O.', {css:pcss, body:`${head}${sum}${per}<div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>`});
+  showDocView(htmlOf(showSum), 'ใบจัดสินค้า • '+d.pos.length+' P.O.', {css:pcss, body:bodyOf(showSum),
+    toggle:{label:'แสดงตาราง “รวมจำนวนหยิบ”', on:showSum, change:on=>{ try{ localStorage.setItem('pt.pickSum', on?'1':'0'); }catch(e){} return {html:htmlOf(on), body:bodyOf(on)}; }}});
 }
 
 /** หน้าดูเอกสารในแอป (ใบจัดสินค้า) — มีปุ่มพิมพ์/PDF และปุ่มปิดที่กดถึงเสมอ ไม่เปิดหน้าต่างใหม่ */
 function showDocView(html, title, printDoc){
+  const tg=printDoc && printDoc.toggle;
   const wrap=document.createElement('div'); wrap.className='pdf-full doc-view';
   // พื้นที่สำหรับพิมพ์ (ซ่อนบนจอ) — ตอนพิมพ์จะแสดงแค่ส่วนนี้ เต็มกระดาษ A4
   let pa=$('#printArea'); if(pa) pa.remove();
@@ -2106,6 +2115,7 @@ function showDocView(html, title, printDoc){
     document.body.appendChild(pa); document.body.classList.add('print-doc');
   }
   wrap.innerHTML=`<div class="bar"><span class="t">${h(title)}</span>
+      ${tg?`<label class="doc-tg" title="${h(tg.label)}"><input type="checkbox" data-tg ${tg.on?'checked':''}><span>${h(tg.label)}</span></label>`:''}
       <button data-print title="พิมพ์ / บันทึกเป็น PDF">🖨 <span class="hide-sm">พิมพ์ / PDF</span></button>
       <button data-win title="เปิดในหน้าต่างใหม่">↗</button><button data-x title="ปิด">✕</button></div>
     <div class="doc-scroll"><div class="doc-page"><iframe title="${h(title)}"></iframe></div></div>
@@ -2133,6 +2143,8 @@ function showDocView(html, title, printDoc){
     if($('#printArea')){ try{ window.print(); return; }catch(e){} }
     try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ fail(new Error('พิมพ์จากหน้านี้ไม่ได้ — กด ↗ เพื่อเปิดในหน้าต่างใหม่แล้วพิมพ์')); }
   };
+  const tgi=$('[data-tg]',wrap);
+  if(tgi) tgi.onchange=()=>{ const r=tg.change(tgi.checked); html=r.html; fr.srcdoc=html; const p=$('#printArea'); if(p) p.innerHTML=`<style>${printDoc.css}</style>${r.body}`; };
   $('[data-win]',wrap).onclick=()=>{ const w=window.open('', '_blank'); if(!w){ toast('เบราว์เซอร์บล็อกหน้าต่างใหม่', true); return; } w.document.open(); w.document.write(html); w.document.close(); };
 }
 
