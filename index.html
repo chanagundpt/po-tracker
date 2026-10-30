@@ -3510,8 +3510,10 @@ function unpackDigits(s){
   });
 }
 function normThai(s){ return unpackDigits(String(s)).replace(/ํา/g,'ำ').replace(/ /g,' '); }
+/** ตัวเลขล้วน 7 หลักขึ้นไป (ไม่มีจุลภาค/ทศนิยม) = รหัส เช่น บาร์โค้ดตัวที่สองในชื่อสินค้า (Beautrium) ไม่ใช่จำนวน/ราคา */
+const CODE_NUM=/^\d{7,}$/;
 function lineNumbers(str){
-  return str.split(' ').filter(w=>/^\d{1,3}(,\d{3})+(\.\d+)?$|^\d+(\.\d+)?$/.test(w)).map(w=>Number(w.replace(/,/g,'')));
+  return str.split(' ').filter(w=>!CODE_NUM.test(w) && /^\d{1,3}(,\d{3})+(\.\d+)?$|^\d+(\.\d+)?$/.test(w)).map(w=>Number(w.replace(/,/g,'')));
 }
 /** ตัวเลขทุกตัวในหน้า พร้อมตำแหน่งกลางโดยประมาณ (ข้อความหนึ่งชิ้นอาจมีหลายตัวเลขคั่นด้วยช่องว่าง) */
 function numberTokens(items){
@@ -3520,7 +3522,7 @@ function numberTokens(items){
     const re=/\S+/g; let m;
     while((m=re.exec(t.s))){
       const w=m[0];
-      if(!/^\d{1,3}(,\d{3})+(\.\d+)?$|^\d+(\.\d+)?$/.test(w)) continue;
+      if(CODE_NUM.test(w) || !/^\d{1,3}(,\d{3})+(\.\d+)?$|^\d+(\.\d+)?$/.test(w)) continue;
       const len=Math.max(1,t.s.length);
       out.push({v:Number(w.replace(/,/g,'')), cx: t.x + ((m.index + w.length/2)/len)*t.w, y:t.y});
     }
