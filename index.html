@@ -1588,6 +1588,8 @@ function pickNotes(g, esc){
   if(g.per.length===1) return esc(ns[0].note);
   return ns.map(x=>esc(x.po.customer)+': '+esc(x.note)).join('<br>');
 }
+/** เอกสารใบจัดสินค้า (พิมพ์/Excel) ไม่ใส่สินค้าที่จำนวนหยิบเป็น 0 */
+const pickNonZero=rows=>rows.filter(r=>Number(r.pick)>0);
 const sumQty=(rows,k)=>rows.reduce((a,r)=>a+(Number(r[k])||0),0);
 function pickAggregate(pos){
   const map={}, out=[];
@@ -2109,6 +2111,7 @@ async function importAllocUpload(file){
 
 async function exportPickExcel(only){
   const d=only ? {pos:only, agg:pickAggregate(only)} : pickSelection(); if(!d) return;
+  d.agg=pickNonZero(d.agg);
   const win = MODE==='gas' ? window.open('', '_blank') : null;
   try{
     await loadScript(XLSX_SRC);
@@ -2117,7 +2120,7 @@ async function exportPickExcel(only){
       .concat(d.agg.map((g,i)=>[i+1,g.barcode,g.sku,g.name,g.brand,g.pick,g.per.map(x=>x.po.customer+' '+x.po.po_no+': '+x.qty).join(' | '),pickNotes(g, x=>String(x)).replace(/<br>/g,' | '),'']))
       .concat([['','','','รวม','',sumQty(d.agg,'pick'),'','','']]);
     const b=[['ลูกค้า','เลข P.O.','กำหนดส่ง','สถานะ','บาร์โค้ด','SKU','ชื่อสินค้า','จำนวนสั่ง','จัดส่งได้','สถานะเช็ค','หน่วยตาม P.O.','หมายเหตุ']];
-    d.pos.forEach(po=>pickRows(po).forEach(r=>b.push([po.customer,po.po_no,po.due_date,ST_LABEL[po.status],r.barcode,r.sku,r.name,r.qty,r.pick,
+    d.pos.forEach(po=>pickNonZero(pickRows(po)).forEach(r=>b.push([po.customer,po.po_no,po.due_date,ST_LABEL[po.status],r.barcode,r.sku,r.name,r.qty,r.pick,
       r.ready===null?'ยังไม่เช็ค':r.ready===0?'ไม่มีสินค้า':r.ready<r.qty?'ขาด '+(r.qty-r.ready):'ครบ', r.unit,r.note])));
     const w1=XLSX.utils.aoa_to_sheet(a); w1['!cols']=[{wch:6},{wch:16},{wch:16},{wch:48},{wch:12},{wch:12},{wch:50},{wch:28},{wch:10}];
     const w2=XLSX.utils.aoa_to_sheet(b); w2['!cols']=[{wch:18},{wch:18},{wch:12},{wch:16},{wch:16},{wch:16},{wch:48},{wch:11},{wch:11},{wch:12},{wch:14},{wch:24}];
@@ -2135,6 +2138,7 @@ function pickSumToggle(n){ return `<label class="sum-tg"><input type="checkbox" 
 function bindPickSumToggle(el){ const c=$('[data-sumtg]',el); if(c) c.onchange=()=>{ try{ localStorage.setItem('pt.pickSum', c.checked?'1':'0'); }catch(e){} }; }
 function printPickList(only){
   const d=only ? {pos:only, agg:pickAggregate(only)} : pickSelection(); if(!d) return;
+  d.agg=pickNonZero(d.agg);
   const esc=h, now=new Date();
   const css=`body{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;margin:18px}
     h1{font-size:18px;margin:0}h2{font-size:14px;margin:18px 0 6px}.sub{color:#555;margin:2px 0 10px}
@@ -2150,10 +2154,10 @@ function printPickList(only){
     ${d.agg.map((g,i)=>`<tr><td>${i+1}</td><td>${esc(g.barcode)}</td><td>${esc(g.sku)}</td><td class="nm">${esc(g.name)}</td><td><b class="${g.pick===0?'zero':''}">${num(g.pick)}</b>${g.unchecked?'<div class="ref">ยังไม่เช็ค</div>':''}</td>
       <td>${g.per.map(x=>esc(x.po.customer)+' '+num(x.qty)).join(', ')}</td><td>${pickNotes(g, esc)}</td><td class="ck">☐</td></tr>`).join('')}
     <tr class="tot"><td colspan="4">รวมทั้งหมด ${d.agg.length} รายการ</td><td>${num(sumQty(d.agg,'pick'))}</td><td colspan="3"></td></tr></table>`;
-  const per=`<h2>แยกตาม P.O.</h2>`+d.pos.map(po=>`<div class="po"><b>${esc(po.customer)} • P.O. ${esc(po.po_no)}</b> — กำหนดส่ง ${esc(thDate(po.due_date,true))}
+  const per=`<h2>แยกตาม P.O.</h2>`+d.pos.map(po=>{ const rows=pickNonZero(pickRows(po)); return `<div class="po"><b>${esc(po.customer)} • P.O. ${esc(po.po_no)}</b> — กำหนดส่ง ${esc(thDate(po.due_date,true))}
     <table><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th><th>หมายเหตุ</th><th class="ck">✓</th></tr>
-    ${pickRows(po).map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}</td><td>${pickCellPrint(r)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('')}
-    <tr class="tot"><td colspan="3">รวม ${pickRows(po).length} รายการ</td><td>${num(sumQty(pickRows(po),'pick'))}</td><td colspan="2"></td></tr></table></div>`).join('');
+    ${rows.length ? rows.map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}</td><td>${pickCellPrint(r)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('') : '<tr><td colspan="6">ไม่มีสินค้าที่ต้องหยิบ</td></tr>'}
+    <tr class="tot"><td colspan="3">รวม ${rows.length} รายการ</td><td>${num(sumQty(rows,'pick'))}</td><td colspan="2"></td></tr></table></div>`; }).join('');
   // ตาราง "รวมจำนวนหยิบ" เลือกแสดงได้ (บางคนต้องการแค่แยกตาม P.O.) — จำค่าที่เลือกไว้ในเครื่อง; ไม่เคยเลือก = แสดงเมื่อมีหลาย P.O.
   let showSum = pickSumOn(d.pos.length);
   const sign='<div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>';
