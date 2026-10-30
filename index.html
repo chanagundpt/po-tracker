@@ -560,6 +560,12 @@ body.has-overlay .fab-alloc,body:has(.modal) .alloc-menu{display:none}
 @media (min-width:761px){
   .ed-box .ed-row{grid-template-columns:150px 130px 130px minmax(280px,1fr) 84px minmax(130px,220px) 34px}
   .ed-box .ed-row input{font-size:14px}
+  /* หัวข้อทุกช่อง (รวม "ชื่อสินค้า") และค่าในช่องอยู่กึ่งกลาง — ยกเว้นชื่อสินค้าในแต่ละแถวชิดซ้ายเหมือนเดิม */
+  .ed-box .ed-row.ed-head{align-items:center;text-align:center}
+  .ed-box .ed-row.ed-head>*{justify-self:stretch;text-align:center}
+  .ed-box .ed-row input{text-align:center}
+  .ed-box .ed-row input[data-k=name]{text-align:left}
+  .ed-box .ed-row [data-k=brand]{padding-left:24px}
 }
 .ed-row input{min-width:0}
 @media (max-width:760px){
