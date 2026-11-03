@@ -518,6 +518,18 @@ body:has(#btnAllocFab:not([hidden])) main{padding-bottom:150px}
 .card-ck{display:flex;align-items:center;justify-content:center;width:30px;height:30px;margin:-3px 2px 0 -4px;flex:none;cursor:pointer}
 .card-ck input{width:21px;height:21px;accent-color:var(--accent);cursor:pointer}
 .card.asel{box-shadow:0 0 0 2px var(--accent)}
+.bulk-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;color:var(--muted);font-size:13px}
+.bulk-row label{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:7px 12px;color:var(--ink);font-weight:600;font-size:14px;cursor:pointer;background:var(--card)}
+.bulk-row input{width:19px;height:19px;accent-color:var(--accent)}
+.bulk-bar{position:fixed;left:0;right:0;bottom:0;z-index:32;background:var(--card);border-top:2px solid var(--accent);box-shadow:0 -8px 22px rgba(0,0,0,.4);
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bulk-bar b{margin-right:auto;font-size:15px}
+.bulk-bar .btn{padding:10px 14px;font-size:14.5px;white-space:normal}
+body.bulk-on .fab{bottom:calc(var(--bbh,64px) + 14px)}
+body.bulk-on .fab-alloc{bottom:calc(var(--bbh,64px) + 74px)}
+body.bulk-on .alloc-menu{bottom:calc(var(--bbh,64px) + 134px)}
+body.bulk-on main{padding-bottom:calc(var(--bbh,64px) + 160px)}
+body.has-overlay .bulk-bar,body:has(.modal) .bulk-bar,body.view-summary .bulk-bar,body.view-blogger .bulk-bar{display:none}
 body.has-overlay .fab-alloc,body:has(.modal) .alloc-menu{display:none}
 .dup-banner{width:100%;text-align:left;border:0;border-radius:12px;padding:10px 14px;margin-bottom:10px;color:#fff;font-weight:600;
   background:linear-gradient(135deg,#8b5cf6,#6d28d9);box-shadow:0 4px 14px rgba(124,58,237,.25)}
@@ -1503,11 +1515,13 @@ function renderList(){
       ${ddHtml('fBrand', f.brand||'แบรนด์ทั้งหมด', !!f.brand)}
       ${ddHtml('fSort', (SORTS.find(x=>x.value===f.sort)||SORTS[0]).label, false)}
     </div>
+    ${ST_IDX[f.status]!=null && list.length ? `<div class="bulk-row"><label><input type="checkbox" id="selAll" ${list.every(p=>S.allocSel[p.id])?'checked':''}> เลือกทั้งหมด (${list.length} ใบ)</label><span>ติ๊กเลือก P.O. แล้วเปลี่ยนขั้นตอนพร้อมกันได้ที่แถบด้านล่าง</span></div>`:''}
     <div class="list">${list.length ? list.map(cardHtml).join('') :
       `<div class="empty">ไม่มี P.O. ตามเงื่อนไขนี้${S.pos.length?'':'<br><br>กด “＋ เพิ่ม P.O.” เพื่ออัปโหลด PDF หรือกด 📧 เพื่อดึงจากเมล'}</div>`}</div>`;
 
   $$('.kpi').forEach(b=>b.onclick=()=>{ f.due=b.dataset.due; if(f.due||f.status!=='ALL') f.status='OPEN'; renderList(); });
-  $$('.chip').forEach(b=>b.onclick=()=>{ f.status=b.dataset.st; f.due=''; renderList(); });
+  $$('.chip').forEach(b=>b.onclick=()=>{ if(f.status!==b.dataset.st) S.allocSel={}; f.status=b.dataset.st; f.due=''; renderList(); });
+  const sa=$('#selAll'); if(sa) sa.onchange=()=>{ list.forEach(p=>{ if(sa.checked) S.allocSel[p.id]=true; else delete S.allocSel[p.id]; }); renderList(); };
   const q=$('#q'); q.oninput=()=>{ f.q=q.value; clearTimeout(q._t); q._t=setTimeout(()=>{ renderList(); const n=$('#q'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
   $('#fCust').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกลูกค้า', opts:customerOpts('ลูกค้าทั้งหมด', filteredPos('customer')), cur:f.customer, onPick:v=>{ f.customer=v; renderList(); }});
   $('#fBrand').onclick=e=>ddToggle(e.currentTarget,{title:'เลือกแบรนด์', opts:brandOpts('แบรนด์ทั้งหมด', filteredPos('brand')), cur:f.brand||'', onPick:v=>{ f.brand=v; renderList(); }});
@@ -1515,7 +1529,7 @@ function renderList(){
   $$('.card').forEach(c=>c.onclick=()=>openDetail(c.dataset.id));
   $$('.card [data-ack]').forEach(l=>{ l.onclick=e=>e.stopPropagation();
     const cb=$('input',l), card=l.closest('.card'); card.classList.toggle('asel', cb.checked);
-    cb.onchange=()=>{ const id=card.dataset.id; if(cb.checked) S.allocSel[id]=true; else delete S.allocSel[id]; card.classList.toggle('asel', cb.checked); updateAllocFab(); }; });
+    cb.onchange=()=>{ const id=card.dataset.id; if(cb.checked) S.allocSel[id]=true; else delete S.allocSel[id]; card.classList.toggle('asel', cb.checked); const sa=$('#selAll'); if(sa) sa.checked=list.every(p=>S.allocSel[p.id]); updateAllocFab(); }; });
   updateAllocFab();
   $$('.card [data-del]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); deletePo(b.closest('.card').dataset.id); });
   $$('.card [data-restore]').forEach(b=>b.onclick=e=>{ e.stopPropagation(); restorePo(b.closest('.card').dataset.id); });
@@ -1529,7 +1543,7 @@ function cardHtml(po){
   const kind = po.status==='DUPLICATE'?'is-dup': po.status==='SUPERSEDED'?'is-old': po.status==='DELETED'?'is-del': po.replaces?'is-new':'';
   return `<div class="card due-${d.cls} ${isClosed(po)&&!kind?'done':''} ${kind}" data-id="${h(po.id)}">
     <div class="card-top">
-      ${S.filter.status==='CHECKING' && po.status==='CHECKING' ? `<label class="card-ck" data-ack title="เลือกเพื่อ Allocate"><input type="checkbox" ${S.allocSel[po.id]?'checked':''}></label>`:''}
+      ${ST_IDX[S.filter.status]!=null && po.status===S.filter.status ? `<label class="card-ck" data-ack title="เลือก P.O. นี้"><input type="checkbox" ${S.allocSel[po.id]?'checked':''}></label>`:''}
       <div class="card-title"><div class="cust">${h(po.customer||'ยังไม่ระบุลูกค้า')}</div><div class="pono">P.O. ${h(po.po_no)}</div></div>
       <span class="badge ${d.cls}">${h(d.text)}</span>
       ${po.status==='DELETED' ? '<button class="card-act" data-restore title="กู้คืน P.O.">'+ICONS.restore+'</button>' : '<button class="card-act" data-del title="ลบ P.O.">'+ICONS.trash+'</button>'}
@@ -1768,10 +1782,60 @@ function updateAllocFab(){
   const b=$('#btnAllocFab'); if(!b) return;
   const show = S.view==='list' && S.pos.some(p=>p.status==='CHECKING');
   b.hidden=!show;
-  Object.keys(S.allocSel).forEach(id=>{ const p=S.pos.find(x=>x.id===id); if(!p || p.status!=='CHECKING') delete S.allocSel[id]; });
-  const n=Object.keys(S.allocSel).length;
+  Object.keys(S.allocSel).forEach(id=>{ const p=S.pos.find(x=>x.id===id); if(!p || p.status!==S.filter.status || ST_IDX[p.status]==null) delete S.allocSel[id]; });
+  const n=Object.keys(S.allocSel).filter(id=>S.pos.find(x=>x.id===id).status==='CHECKING').length;
   $('#allocN').textContent = n ? n+' ใบ' : '';
   if(!show) closeAllocMenu();
+  updateBulkBar();
+}
+
+/* ---------- เปลี่ยนขั้นตอนหลาย P.O. พร้อมกัน (เฉพาะหัวข้อ 1–5) ----------
+   ติ๊กการ์ดในหัวข้อ → แถบล่าง “➜ ไปขั้นถัดไป” / “↩ ย้อนกลับ” → setStatus ทีละใบ (คิว bgCall) */
+function bulkSelected(){ return ST_IDX[S.filter.status]==null ? [] : filteredPos().filter(p=>p.status===S.filter.status && S.allocSel[p.id]); }
+function updateBulkBar(){
+  let bar=$('#bulkBar');
+  const sel = S.view==='list' ? bulkSelected() : [];
+  document.body.classList.toggle('bulk-on', !!sel.length);
+  if(!sel.length){ if(bar) bar.remove(); return; }
+  const i=ST_IDX[S.filter.status], next=STATUSES[i+1], prev=STATUSES[i-1];
+  if(!bar){ bar=document.createElement('div'); bar.id='bulkBar'; bar.className='bulk-bar'; document.body.appendChild(bar); }
+  bar.innerHTML=`<b>เลือก ${sel.length} ใบ</b>
+    ${prev?`<button class="btn" data-bk="-1">↩ ย้อนไป “${h(prev.label)}”</button>`:''}
+    ${next?`<button class="btn primary" data-bk="1">➜ ไปขั้น “${h(next.label)}”</button>`:''}
+    <button class="btn" data-bk="0" title="ยกเลิกที่เลือก">✕</button>`;
+  $$('[data-bk]',bar).forEach(b=>b.onclick=()=>{ const d=Number(b.dataset.bk); if(d) bulkMove(d).catch(fail); else { S.allocSel={}; renderList(); } });
+  document.body.style.setProperty('--bbh', bar.offsetHeight+'px');
+}
+async function bulkMove(dir){
+  const sel=bulkSelected(), to=(STATUSES[ST_IDX[S.filter.status]+dir]||{}).key;
+  if(!sel.length || !to) return;
+  const names=sel.slice(0,8).map(p=>'• '+(p.customer||'-')+' '+p.po_no).join('\n')+(sel.length>8?'\n… และอีก '+(sel.length-8)+' ใบ':'');
+  const warn = dir>0 && ST_IDX[to]>=ST_IDX.PICKED ? sel.filter(p=>{ const s=itemSummary(itemsOf(p.id)); return s.pending||s.out||s.partial; }) : [];
+  const warnTxt = warn.length ? '\n\n⚠ สินค้ายังไม่พร้อมครบ '+warn.length+' ใบ: '+warn.slice(0,5).map(p=>p.po_no).join(', ')+(warn.length>5?' …':'') : '';
+  let fields=null;
+  if(to==='SHIPPED'){ fields=await bulkShipDialog(sel.length, names+warnTxt); if(!fields) return; }
+  else if(!await confirmBox((dir>0?'ย้าย ':'ย้อน ')+sel.length+' ใบ ไปขั้น “'+ST_LABEL[to]+'”', names+warnTxt, dir>0?'➜ ย้ายไปขั้นถัดไป':'↩ ย้อนกลับ')) return;
+  sel.forEach(po=>{
+    const old=Object.assign({}, po), args={id:po.id, status:to};
+    if(fields) args.fields=fields;
+    const opt=Object.assign({}, po, {status:to}, fields||{});
+    if(to==='SHIPPED' && !opt.ship_date) opt.ship_date=S.today;
+    syncPo(opt);
+    bgCall('setStatus', args, r=>syncPo(r), ()=>{ syncPo(old); if(!S.detail) renderList(); });
+  });
+  S.allocSel={}; renderList();
+  toast('ย้าย '+sel.length+' ใบ ไป “'+ST_LABEL[to]+'” แล้ว');
+}
+function bulkShipDialog(n, msg){
+  return new Promise(res=>{
+    const m=openModal(`<div class="modal-head">ยืนยันส่งสินค้าแล้ว ${n} ใบ</div><div class="modal-body">
+      <div style="white-space:pre-wrap;margin-bottom:12px">${h(msg)}</div>
+      <div class="f"><label>วันที่ส่ง</label><input type="date" id="sd" value="${h(S.today)}"></div>
+      <div class="f"><label>ขนส่ง (เว้นว่าง = ไม่เปลี่ยน)</label><input id="sc" data-list="carrier" autocomplete="off" placeholder="เลือกหรือพิมพ์เพื่อเพิ่ม"></div>
+    </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>✓ ยืนยันส่งแล้ว</button></div>`);
+    $('[data-x]',m.el).onclick=()=>{m.close();res(null);};
+    $('[data-ok]',m.el).onclick=()=>{ const r={ship_date:$('#sd',m.el).value||S.today}, c=$('#sc',m.el).value.trim(); if(c) r.carrier=c; m.close(); res(r); };
+  });
 }
 function closeAllocMenu(){ const m=$('#allocMenu'); if(m) m.remove(); }
 function openAllocMenu(){
