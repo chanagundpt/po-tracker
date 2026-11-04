@@ -151,6 +151,8 @@ body.view-blogger .fab{display:none}
 .pick-bar .sum-tg{flex:none}
 .doc-tg{display:flex;align-items:center;gap:6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;margin-right:4px}
 .doc-tg input{width:18px;height:18px;accent-color:var(--accent)}
+.doc-tg.off{opacity:.45;cursor:default}
+.doc-sel select{background:#2a2f3a;color:#eee;border:1px solid #555;border-radius:8px;padding:4px 6px;font:inherit;font-size:13px}
 @media (max-width:640px){ .doc-tg span{white-space:normal;line-height:1.2;font-size:12px;max-width:120px} }
 .pill-notpo{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
 .panel.review.notpo{border-color:var(--red);background:var(--red-soft)}
@@ -1602,6 +1604,32 @@ function pickNotes(g, esc){
   if(g.per.length===1) return esc(ns[0].note);
   return ns.map(x=>esc(x.po.customer)+': '+esc(x.note)).join('<br>');
 }
+/* ---------- จำนวนต่อลัง (เฉพาะใบจัดสินค้าพิมพ์) ----------
+   นำเข้าจากไฟล์ Excel ในหน้า ⚙ → เก็บในชีต Master (casePacks / saveCasePacks); SKU ที่ไม่มีในไฟล์ = ไม่แสดงจำนวนลัง */
+S.cases=null;
+async function loadCases(force){
+  if(S.cases && !force) return S.cases;
+  try{ S.cases=await call('casePacks'); S.casesErr=''; }
+  catch(e){ S.cases=[]; S.casesErr=/ไม่รู้จักคำสั่ง|unknown/i.test(e.message)?'ต้องอัปเดต Code.gs เป็นเวอร์ชัน 1.8.5 ก่อน':e.message; }
+  return S.cases;
+}
+function caseOf(r){
+  const L=S.cases||[], sku=String(r.sku||'').trim().toUpperCase(), bc=String(r.barcode||'').trim();
+  return (sku && L.find(c=>String(c.sku).toUpperCase()===sku)) || (bc && L.find(c=>String(c.barcode)===bc)) || null;
+}
+/** จำนวนลังของยอดหยิบ: "3 ลัง + 4 ชิ้น" (ลังละ 18) — ไม่มีข้อมูลต่อลัง = ว่าง */
+function caseCell(r){
+  const c=caseOf(r), q=Number(r.pick)||0; if(!c || !q) return '';
+  const full=Math.floor(q/c.qty), rem=q%c.qty;
+  const txt=full ? '<b>'+num(full)+' ลัง</b>'+(rem?' + '+num(rem)+' ชิ้น':'') : num(rem)+' ชิ้น (ไม่เต็มลัง)';
+  return txt+'<div class="ref">ลังละ '+num(c.qty)+'</div>';
+}
+function caseTotal(rows){
+  let full=0, rem=0, n=0;
+  rows.forEach(r=>{ const c=caseOf(r), q=Number(r.pick)||0; if(!c || !q) return; n++; full+=Math.floor(q/c.qty); rem+=q%c.qty; });
+  return n ? '<b>'+num(full)+' ลัง</b>'+(rem?'<div class="ref">+ เศษ '+num(rem)+' ชิ้น</div>':'') : '';
+}
+
 /** เอกสารใบจัดสินค้า (พิมพ์/Excel) ไม่ใส่สินค้าที่จำนวนหยิบเป็น 0 */
 const pickNonZero=rows=>rows.filter(r=>Number(r.pick)>0);
 const sumQty=(rows,k)=>rows.reduce((a,r)=>a+(Number(r[k])||0),0);
@@ -2200,51 +2228,67 @@ async function exportPickExcel(only){
 function pickSumOn(n){ try{ const v=localStorage.getItem('pt.pickSum'); if(v!==null) return v==='1'; }catch(e){} return n>1; }
 function pickSumToggle(n){ return `<label class="sum-tg"><input type="checkbox" data-sumtg ${pickSumOn(n)?'checked':''}> พิมพ์ตาราง “รวมจำนวนหยิบ” ด้วย</label>`; }
 function bindPickSumToggle(el){ const c=$('[data-sumtg]',el); if(c) c.onchange=()=>{ try{ localStorage.setItem('pt.pickSum', c.checked?'1':'0'); }catch(e){} }; }
-function printPickList(only){
+/** ตัวเลือกก่อนพิมพ์ (จำในเครื่อง): ตารางรวมหยิบ / จำนวนลัง / แนวกระดาษ */
+function pickOpt(k, def){ try{ const v=localStorage.getItem('pt.'+k); if(v!==null) return v; }catch(e){} return def; }
+function setPickOpt(k, v){ try{ localStorage.setItem('pt.'+k, v); }catch(e){} }
+async function printPickList(only){
   const d=only ? {pos:only, agg:pickAggregate(only)} : pickSelection(); if(!d) return;
   d.agg=pickNonZero(d.agg);
+  await loadCases();
   const esc=h, now=new Date();
-  const css=`body{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;margin:18px}
+  const perRows=d.pos.map(po=>({po, rows:pickNonZero(pickRows(po))}));
+  const hasCase=d.agg.some(g=>caseOf(g));
+  const css=o=>`body{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;margin:18px}
     h1{font-size:18px;margin:0}h2{font-size:14px;margin:18px 0 6px}.sub{color:#555;margin:2px 0 10px}
     table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{border:1px solid #999;padding:4px 6px;text-align:center;vertical-align:middle}
     th{background:#eee}.nm{text-align:left}.ck{width:34px}.tot td{background:#f5f5f5;font-weight:600}.ref{color:#666;font-size:10px}.zero{color:#c00}.po{break-inside:avoid;margin-bottom:12px}
     .sign{display:flex;gap:40px;margin-top:24px}.sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}
-    @page{size:A4;margin:12mm}@media print{.noprint{display:none}}`;
+    @page{size:A4 ${o.orient};margin:12mm}@media print{.noprint{display:none}}`;
   const logo=($('#logoImg')||{}).src||'';
   const head=`<div style="display:flex;align-items:center;gap:12px">${logo?`<img src="${logo}" style="height:34px" alt="2NK">`:''}<h1>ใบจัดสินค้า (Picking List)</h1></div><div class="sub">พิมพ์เมื่อ ${now.toLocaleString('th-TH')} • โดย ${esc(S.user)} • ${d.pos.length} P.O.</div>
     <table><tr><th>ลูกค้า</th><th>เลข P.O.</th><th>กำหนดส่ง</th><th>นัดส่ง</th><th>ส่งที่</th></tr>
     ${d.pos.map(p=>`<tr><td>${esc(p.customer)}</td><td>${esc(p.po_no)}</td><td>${esc(thDate(p.due_date,true))}</td><td>${esc(p.appointment||'')}</td><td>${esc(p.ship_to||'')}</td></tr>`).join('')}</table>`;
-  const sum=`<h2>รวมจำนวนหยิบ</h2><table><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th><th>แยกตาม P.O.</th><th>หมายเหตุ</th><th class="ck">หยิบ</th></tr>
+  const sum=cs=>`<h2>รวมจำนวนหยิบ</h2><table><tr><th>#</th><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th>${cs?'<th>จำนวนลัง</th>':''}<th>แยกตาม P.O.</th><th>หมายเหตุ</th><th class="ck">หยิบ</th></tr>
     ${d.agg.map((g,i)=>`<tr><td>${i+1}</td><td>${esc(g.barcode)}</td><td>${esc(g.sku)}</td><td class="nm">${esc(g.name)}</td><td><b class="${g.pick===0?'zero':''}">${num(g.pick)}</b>${g.unchecked?'<div class="ref">ยังไม่เช็ค</div>':''}</td>
-      <td>${g.per.map(x=>esc(x.po.customer)+' '+num(x.qty)).join(', ')}</td><td>${pickNotes(g, esc)}</td><td class="ck">☐</td></tr>`).join('')}
-    <tr class="tot"><td colspan="4">รวมทั้งหมด ${d.agg.length} รายการ</td><td>${num(sumQty(d.agg,'pick'))}</td><td colspan="3"></td></tr></table>`;
-  const per=`<h2>แยกตาม P.O.</h2>`+d.pos.map(po=>{ const rows=pickNonZero(pickRows(po)); return `<div class="po"><b>${esc(po.customer)} • P.O. ${esc(po.po_no)}</b> — กำหนดส่ง ${esc(thDate(po.due_date,true))}
-    <table><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th><th>หมายเหตุ</th><th class="ck">✓</th></tr>
-    ${rows.length ? rows.map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}</td><td>${pickCellPrint(r)}</td><td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('') : '<tr><td colspan="6">ไม่มีสินค้าที่ต้องหยิบ</td></tr>'}
-    <tr class="tot"><td colspan="3">รวม ${rows.length} รายการ</td><td>${num(sumQty(rows,'pick'))}</td><td colspan="2"></td></tr></table></div>`; }).join('');
-  // ตาราง "รวมจำนวนหยิบ" เลือกแสดงได้ (บางคนต้องการแค่แยกตาม P.O.) — จำค่าที่เลือกไว้ในเครื่อง; ไม่เคยเลือก = แสดงเมื่อมีหลาย P.O.
-  let showSum = pickSumOn(d.pos.length);
+      ${cs?`<td>${caseCell(g)}</td>`:''}<td>${g.per.map(x=>esc(x.po.customer)+' '+num(x.qty)).join(', ')}</td><td>${pickNotes(g, esc)}</td><td class="ck">☐</td></tr>`).join('')}
+    <tr class="tot"><td colspan="4">รวมทั้งหมด ${d.agg.length} รายการ</td><td>${num(sumQty(d.agg,'pick'))}</td>${cs?`<td>${caseTotal(d.agg)}</td>`:''}<td colspan="3"></td></tr></table>`;
+  const per=cs=>`<h2>แยกตาม P.O.</h2>`+perRows.map(({po, rows})=>`<div class="po"><b>${esc(po.customer)} • P.O. ${esc(po.po_no)}</b> — กำหนดส่ง ${esc(thDate(po.due_date,true))}
+    <table><tr><th>บาร์โค้ด</th><th>SKU</th><th class="nm">ชื่อสินค้า</th><th>จำนวนหยิบ</th>${cs?'<th>จำนวนลัง</th>':''}<th>หมายเหตุ</th><th class="ck">✓</th></tr>
+    ${rows.length ? rows.map(r=>`<tr><td>${esc(r.barcode)}</td><td>${esc(r.sku)}</td><td class="nm">${esc(r.name)}</td><td>${pickCellPrint(r)}</td>${cs?`<td>${caseCell(r)}</td>`:''}<td>${esc(r.note)}</td><td class="ck">☐</td></tr>`).join('') : `<tr><td colspan="${cs?7:6}">ไม่มีสินค้าที่ต้องหยิบ</td></tr>`}
+    <tr class="tot"><td colspan="3">รวม ${rows.length} รายการ</td><td>${num(sumQty(rows,'pick'))}</td>${cs?`<td>${caseTotal(rows)}</td>`:''}<td colspan="2"></td></tr></table></div>`).join('');
+  // ตัวเลือกจำไว้ในเครื่อง: รวมหยิบ (ไม่เคยเลือก = แสดงเมื่อหลาย P.O.), จำนวนลัง (ค่าเริ่มต้นแสดง), แนวกระดาษ (ค่าเริ่มต้นแนวตั้ง)
+  const o={sum:pickSumOn(d.pos.length), cases:pickOpt('pickCase','1')==='1', orient:pickOpt('pickOrient','portrait')==='landscape'?'landscape':'portrait'};
   const sign='<div class="sign"><div>ผู้จัดสินค้า</div><div>ผู้ตรวจสอบ</div><div>วันที่</div></div>';
-  const bodyOf=on=>head+(on?sum:'')+per+sign;
-  const htmlOf=on=>`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบจัดสินค้า ${S.today}</title>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet"><style>${css}</style></head>
-    <body>${bodyOf(on)}</body></html>`;
+  const bodyOf=o=>{ const cs=o.cases && hasCase; return head+(o.sum?sum(cs):'')+per(cs)+sign; };
+  const htmlOf=o=>`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบจัดสินค้า ${S.today}</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&display=swap" rel="stylesheet"><style>${css(o)}</style></head>
+    <body>${bodyOf(o)}</body></html>`;
   // ชุดสำหรับพิมพ์จริง: ใส่เอกสารลงหน้าหลัก แล้วซ่อนส่วนอื่นตอนพิมพ์ (ได้ A4 เต็มแผ่น)
-  const pcss=`#printArea{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;background:#fff;line-height:1.4}
+  const pcss=o=>`#printArea{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;font-size:12px;color:#111;background:#fff;line-height:1.4}
     #printArea h1{font-size:18px;margin:0;color:#111}#printArea h2{font-size:14px;margin:18px 0 6px;color:#111}#printArea .sub{color:#555;margin:2px 0 10px}
     #printArea table{width:100%;border-collapse:collapse;margin-bottom:6px}
     #printArea th,#printArea td{border:1px solid #999;padding:4px 6px;text-align:center;vertical-align:middle;color:#111;background:#fff}
     #printArea th{background:#eee}#printArea .nm{text-align:left}#printArea .ck{width:34px}#printArea .tot td{background:#f5f5f5;font-weight:600}
     #printArea .po{break-inside:avoid;page-break-inside:avoid;margin-bottom:12px}#printArea tr{break-inside:avoid;page-break-inside:avoid}
     #printArea .ref{color:#666;font-size:10px}#printArea .zero{color:#c00}
-    #printArea .sign{display:flex;gap:40px;margin-top:24px}#printArea .sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}`;
-  showDocView(htmlOf(showSum), 'ใบจัดสินค้า • '+d.pos.length+' P.O.', {css:pcss, body:bodyOf(showSum),
-    toggle:{label:'แสดงตาราง “รวมจำนวนหยิบ”', on:showSum, change:on=>{ try{ localStorage.setItem('pt.pickSum', on?'1':'0'); }catch(e){} return {html:htmlOf(on), body:bodyOf(on)}; }}});
+    #printArea .sign{display:flex;gap:40px;margin-top:24px}#printArea .sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}
+    @media print{@page{size:A4 ${o.orient};margin:12mm}}`;
+  const opts=[{key:'sum', label:'รวมจำนวนหยิบ', on:o.sum},
+    {key:'cases', label:'จำนวนลัง', on:o.cases, disabled:!hasCase, hint:hasCase?'แสดงช่องจำนวนลัง':(S.casesErr||'ยังไม่มีข้อมูลจำนวนต่อลังของสินค้าในใบนี้ (นำเข้าที่ ⚙)')},
+    {key:'orient', type:'select', label:'แนวกระดาษ', value:o.orient, choices:[['portrait','แนวตั้ง'],['landscape','แนวนอน']]}];
+  showDocView(htmlOf(o), 'ใบจัดสินค้า • '+d.pos.length+' P.O.', {css:pcss(o), body:bodyOf(o), landscape:o.orient==='landscape', options:opts,
+    change:(k,v)=>{
+      o[k]=v;
+      if(k==='sum') setPickOpt('pickSum', v?'1':'0');
+      if(k==='cases') setPickOpt('pickCase', v?'1':'0');
+      if(k==='orient') setPickOpt('pickOrient', v);
+      return {html:htmlOf(o), body:bodyOf(o), css:pcss(o), landscape:o.orient==='landscape'};
+    }});
 }
 
 /** หน้าดูเอกสารในแอป (ใบจัดสินค้า) — มีปุ่มพิมพ์/PDF และปุ่มปิดที่กดถึงเสมอ ไม่เปิดหน้าต่างใหม่ */
 function showDocView(html, title, printDoc){
-  const tg=printDoc && printDoc.toggle;
+  const opts=(printDoc && printDoc.options) || [];
   const wrap=document.createElement('div'); wrap.className='pdf-full doc-view';
   // พื้นที่สำหรับพิมพ์ (ซ่อนบนจอ) — ตอนพิมพ์จะแสดงแค่ส่วนนี้ เต็มกระดาษ A4
   let pa=$('#printArea'); if(pa) pa.remove();
@@ -2254,7 +2298,9 @@ function showDocView(html, title, printDoc){
     document.body.appendChild(pa); document.body.classList.add('print-doc');
   }
   wrap.innerHTML=`<div class="bar"><span class="t">${h(title)}</span>
-      ${tg?`<label class="doc-tg" title="${h(tg.label)}"><input type="checkbox" data-tg ${tg.on?'checked':''}><span>${h(tg.label)}</span></label>`:''}
+      ${opts.map(o=>o.type==='select'
+        ? `<label class="doc-tg doc-sel" title="${h(o.label)}"><span class="hide-sm">${h(o.label)}</span><select data-opt="${h(o.key)}">${o.choices.map(c=>`<option value="${h(c[0])}" ${c[0]===o.value?'selected':''}>${h(c[1])}</option>`).join('')}</select></label>`
+        : `<label class="doc-tg ${o.disabled?'off':''}" title="${h(o.hint||o.label)}"><input type="checkbox" data-opt="${h(o.key)}" ${o.on&&!o.disabled?'checked':''} ${o.disabled?'disabled':''}><span>${h(o.label)}</span></label>`).join('')}
       <button data-print title="พิมพ์ / บันทึกเป็น PDF">🖨 <span class="hide-sm">พิมพ์ / PDF</span></button>
       <button data-win title="เปิดในหน้าต่างใหม่">↗</button><button data-x title="ปิด">✕</button></div>
     <div class="doc-scroll"><div class="doc-page"><iframe title="${h(title)}"></iframe></div></div>
@@ -2263,7 +2309,7 @@ function showDocView(html, title, printDoc){
   try{ history.pushState(Object.assign({}, history.state||{}, {pdf:1}), ''); }catch(e){}
   const fr=$('iframe',wrap);
   // แสดงขนาดกระดาษ A4 แล้วย่อให้พอดีความกว้างจอ (เหมือนตัวอย่างก่อนพิมพ์)
-  const PAGE_W=820;
+  let PAGE_W=printDoc && printDoc.landscape ? 1160 : 820;
   let mult=1;
   const fit=()=>{ try{
     const d=fr.contentDocument, hgt=Math.max(d.documentElement.scrollHeight, d.body.scrollHeight)+30;
@@ -2282,8 +2328,11 @@ function showDocView(html, title, printDoc){
     if($('#printArea')){ try{ window.print(); return; }catch(e){} }
     try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ fail(new Error('พิมพ์จากหน้านี้ไม่ได้ — กด ↗ เพื่อเปิดในหน้าต่างใหม่แล้วพิมพ์')); }
   };
-  const tgi=$('[data-tg]',wrap);
-  if(tgi) tgi.onchange=()=>{ const r=tg.change(tgi.checked); html=r.html; fr.srcdoc=html; const p=$('#printArea'); if(p) p.innerHTML=`<style>${printDoc.css}</style>${r.body}`; };
+  $$('[data-opt]',wrap).forEach(el=>el.onchange=()=>{
+    const r=printDoc.change(el.dataset.opt, el.type==='checkbox' ? el.checked : el.value);
+    html=r.html; if(r.css) printDoc.css=r.css; if(r.landscape!==undefined) PAGE_W=r.landscape ? 1160 : 820;
+    fr.srcdoc=html; const p=$('#printArea'); if(p) p.innerHTML=`<style>${printDoc.css}</style>${r.body}`;
+  });
   $('[data-win]',wrap).onclick=()=>{ const w=window.open('', '_blank'); if(!w){ toast('เบราว์เซอร์บล็อกหน้าต่างใหม่', true); return; } w.document.open(); w.document.write(html); w.document.close(); };
 }
 
@@ -3187,6 +3236,11 @@ function openSettings(){
       <div class="ref">สำหรับสินค้าที่ P.O. ใช้รหัส/บาร์โค้ดอื่นที่ไม่มีใน JST — นำเข้าไฟล์ Excel/CSV ที่มีคอลัมน์ รหัสอื่น + SKU ของ JST + ชื่อสินค้า (การ “เลือกสินค้าเอง” แล้วติ๊กจำไว้ ก็บันทึกที่นี่เช่นกัน)</div>
       <label class="btn sm" style="justify-self:start">📥 นำเข้าไฟล์ (Excel / CSV)<input type="file" id="xFile" accept=".xlsx,.xls,.csv" hidden></label>
     </div>
+    <div class="set-sec"><h4>จำนวนต่อลัง <span class="ref" id="casesN">${S.cases?'('+num(S.cases.length)+' SKU)':''}</span></h4>
+      <div class="ref">ใช้แสดงช่อง “จำนวนลัง” ในใบจัดสินค้า — นำเข้าไฟล์ Excel ที่มีคอลัมน์ SKU (หรือบาร์โค้ด) + จำนวนต่อลัง; สินค้าที่ไม่อยู่ในไฟล์จะไม่แสดงจำนวนลัง</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn sm">📥 นำเข้าไฟล์จำนวนต่อลัง<input type="file" id="cFile" accept=".xlsx,.xls,.csv" hidden></label>
+        <button class="btn sm" data-cases>📋 ดูรายการ</button></div>
+    </div>
     <div class="set-sec"><h4>ลูกค้า <span class="ref">(${S.lists.customers.length}) — แตะชื่อเพื่อแก้ไขหรือลบ</span></h4>
       <div class="chiplist">${S.lists.customers.map(c=>`<button class="chip-ed" data-edm="customer" data-name="${h(c)}">${h(c)} ✎</button>`).join('')}</div>
       <div><button class="btn sm" data-addm="customer">＋ เพิ่มลูกค้า</button></div>
@@ -3211,6 +3265,61 @@ function openSettings(){
   });
   $$('[data-edm]',md.el).forEach(b=>b.onclick=()=>editMasterName(b.dataset.edm, b.dataset.name, md));
   $('#xFile',md.el).onchange=e=>{ const f=e.target.files[0]; if(f){ md.close(); importExtraFile(f); } };
+  $('#cFile',md.el).onchange=e=>{ const f=e.target.files[0]; if(f){ md.close(); importCaseFile(f); } };
+  $('[data-cases]',md.el).onclick=()=>{ md.close(); showCaseList(); };
+  if(!S.cases) loadCases().then(()=>{ const n=$('#casesN',md.el); if(n) n.textContent=S.casesErr?'— '+S.casesErr:'('+num(S.cases.length)+' SKU)'; });
+}
+
+async function showCaseList(){
+  await loadCases(true);
+  const L=S.cases||[];
+  const md=openModal(`<div class="modal-head">จำนวนต่อลัง (${num(L.length)} SKU)</div><div class="modal-body">
+    ${S.casesErr?`<div class="alert warn">${h(S.casesErr)}</div>`:''}
+    ${L.length?`<div style="overflow:auto"><table class="prev-table"><tr><th>SKU</th><th>บาร์โค้ด</th><th>ชื่อสินค้า</th><th>ต่อลัง</th></tr>
+      ${L.map(c=>`<tr><td>${h(c.sku)}</td><td>${h(c.barcode)}</td><td>${h(c.name)}</td><td><b>${num(c.qty)}</b></td></tr>`).join('')}</table></div>`:'<div class="ref">ยังไม่มีข้อมูล — กด ⚙ → นำเข้าไฟล์จำนวนต่อลัง</div>'}
+  </div><div class="modal-foot"><button class="btn" data-x>ปิด</button></div>`, true);
+  $('[data-x]',md.el).onclick=()=>md.close();
+}
+
+async function importCaseFile(file){
+  let rows;
+  try{
+    await loadScript(XLSX_SRC);
+    const wb=XLSX.read(await file.arrayBuffer(), {type:'array'});
+    rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false, defval:''}).filter(r=>r.some(c=>String(c).trim()));
+  }catch(e){ fail(e); return; }
+  if(rows.length<2){ toast('ไฟล์ไม่มีข้อมูล', true); return; }
+  const KW=/barcode|บาร์โค้ด|sku|ลัง|carton|case|ชื่อ|name|product/i;
+  let hi=0, hs=-1;
+  rows.slice(0,10).forEach((r,i)=>{ const sc=r.filter(c=>String(c).trim() && KW.test(String(c)) && String(c).length<40).length; if(sc>hs){ hs=sc; hi=i; } });
+  rows=rows.slice(hi);
+  const head=rows[0].map(x=>String(x).trim()), guess=re=>head.findIndex(x=>re.test(x));
+  const cQty=guess(/ลัง|carton|case|ctn|pack/i), cSku=guess(/sku/i), cBc=guess(/barcode|บาร์โค้ด|ean/i);
+  const cName=head.findIndex((x,i)=>i!==cQty && /ชื่อ|name|product|สินค้า/i.test(x));
+  const sel=(id,cur,allowNone)=>`<select id="${id}">${allowNone?'<option value="-1">— ไม่มี —</option>':''}${head.map((x,i)=>`<option value="${i}" ${i===cur?'selected':''}>${h(x||'คอลัมน์ '+(i+1))}</option>`).join('')}</select>`;
+  const md=openModal(`<div class="modal-head">นำเข้าจำนวนต่อลัง</div><div class="modal-body">
+    <div class="ref">${h(file.name)} • ${num(rows.length-1)} แถว — เลือกว่าคอลัมน์ไหนคืออะไร</div>
+    <div class="map-grid">
+      <div class="f"><label>SKU</label>${sel('cSku',cSku,true)}</div>
+      <div class="f"><label>บาร์โค้ด</label>${sel('cBc',cBc,true)}</div>
+      <div class="f"><label>ชื่อสินค้า</label>${sel('cName',cName,true)}</div>
+      <div class="f"><label>จำนวนต่อลัง *</label>${sel('cQty',cQty)}</div>
+    </div>
+    <label class="sum-tg"><input type="checkbox" id="cRep" checked> ใช้ไฟล์นี้แทนรายการเดิมทั้งหมด (ไม่ติ๊ก = เพิ่ม/อัปเดตเฉพาะ SKU ในไฟล์)</label>
+    <div style="overflow:auto"><table class="prev-table"><tr>${head.map(x=>`<th>${h(x)}</th>`).join('')}</tr>
+      ${rows.slice(1,6).map(r=>`<tr>${head.map((_,i)=>`<td>${h(r[i])}</td>`).join('')}</tr>`).join('')}</table></div>
+  </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>นำเข้า</button></div>`, true);
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=async()=>{
+    const v=id=>Number($('#'+id,md.el).value), si=v('cSku'), bi=v('cBc'), ni=v('cName'), qi=v('cQty');
+    const cell=(r,i)=>i>=0?String(r[i]||'').trim():'';
+    const data=rows.slice(1).map(r=>({sku:cell(r,si), barcode:cell(r,bi), name:cell(r,ni), qty:Math.floor(Number(cell(r,qi).replace(/,/g,''))||0)}))
+      .filter(r=>(r.sku||r.barcode) && r.qty>0);
+    if(!data.length){ toast('ไม่มีแถวที่ใช้ได้ (ต้องมี SKU หรือบาร์โค้ด และจำนวนต่อลัง)', true); return; }
+    $('[data-ok]',md.el).disabled=true;
+    try{ S.cases=await call('saveCasePacks',{rows:data, replace:$('#cRep',md.el).checked}); S.casesErr=''; md.close(); toast('บันทึกจำนวนต่อลังแล้ว '+num(data.length)+' SKU (ทั้งหมด '+num(S.cases.length)+')'); }
+    catch(e){ fail(/ไม่รู้จักคำสั่ง|unknown/i.test(e.message)?new Error('ต้องอัปเดต Code.gs เป็นเวอร์ชัน 1.8.5 ก่อน'):e); $('[data-ok]',md.el).disabled=false; }
+  };
 }
 
 function editMasterName(type, name, parent){
