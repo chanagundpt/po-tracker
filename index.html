@@ -149,9 +149,12 @@ body.view-blogger .fab{display:none}
 .sum-tg{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);cursor:pointer}
 .sum-tg input{width:18px;height:18px;accent-color:var(--accent)}
 .pick-bar .sum-tg{flex:none}
+.print-opts{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px 14px}
+.print-orient{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:5px 8px;font:inherit;font-size:13px}
 .doc-tg{display:flex;align-items:center;gap:6px;font-size:13px;color:#ddd;cursor:pointer;white-space:nowrap;margin-right:4px}
 .doc-tg input{width:18px;height:18px;accent-color:var(--accent)}
-.doc-tg.off{opacity:.45;cursor:default}
+.doc-tg.off{opacity:.55}
+.doc-view .bar{flex-wrap:wrap;row-gap:6px}
 .doc-sel select{background:#2a2f3a;color:#eee;border:1px solid #555;border-radius:8px;padding:4px 6px;font:inherit;font-size:13px}
 @media (max-width:640px){ .doc-tg span{white-space:normal;line-height:1.2;font-size:12px;max-width:120px} }
 .pill-notpo{background:var(--red-soft);color:var(--red);border:1px solid var(--red)}
@@ -1608,7 +1611,7 @@ function pickNotes(g, esc){
    นำเข้าจากไฟล์ Excel ในหน้า ⚙ → เก็บในชีต Master (casePacks / saveCasePacks); SKU ที่ไม่มีในไฟล์ = ไม่แสดงจำนวนลัง */
 S.cases=null;
 async function loadCases(force){
-  if(S.cases && !force) return S.cases;
+  if(S.cases && S.cases.length && !S.casesErr && !force) return S.cases;   // ยังไม่มีข้อมูล/เคยโหลดไม่ได้ = ถามเซิร์ฟเวอร์ใหม่ทุกครั้ง
   try{ S.cases=await call('casePacks'); S.casesErr=''; }
   catch(e){ S.cases=[]; S.casesErr=/ไม่รู้จักคำสั่ง|unknown/i.test(e.message)?'ต้องอัปเดต Code.gs เป็นเวอร์ชัน 1.8.5 ก่อน':e.message; }
   return S.cases;
@@ -2226,8 +2229,18 @@ async function exportPickExcel(only){
 }
 /** ตั้งค่า "พิมพ์ตารางรวมจำนวนหยิบ" (จำในเครื่อง; ยังไม่เคยเลือก = แสดงเมื่อหลาย P.O.) */
 function pickSumOn(n){ try{ const v=localStorage.getItem('pt.pickSum'); if(v!==null) return v==='1'; }catch(e){} return n>1; }
-function pickSumToggle(n){ return `<label class="sum-tg"><input type="checkbox" data-sumtg ${pickSumOn(n)?'checked':''}> พิมพ์ตาราง “รวมจำนวนหยิบ” ด้วย</label>`; }
-function bindPickSumToggle(el){ const c=$('[data-sumtg]',el); if(c) c.onchange=()=>{ try{ localStorage.setItem('pt.pickSum', c.checked?'1':'0'); }catch(e){} }; }
+/** ตัวเลือกก่อนพิมพ์ในหน้าสรุป/ป๊อปอัป: รวมจำนวนหยิบ / จำนวนลัง / กระดาษ A4 (ค่าเดียวกับแถบหน้าดูเอกสาร) */
+function pickSumToggle(n){
+  const or=pickOpt('pickOrient','portrait');
+  return `<span class="print-opts"><label class="sum-tg"><input type="checkbox" data-sumtg ${pickSumOn(n)?'checked':''}> พิมพ์ตาราง “รวมจำนวนหยิบ” ด้วย</label>
+    <label class="sum-tg"><input type="checkbox" data-casetg ${pickOpt('pickCase','1')==='1'?'checked':''}> จำนวนลัง</label>
+    <select class="print-orient" data-orienttg title="ขนาดกระดาษ"><option value="portrait" ${or!=='landscape'?'selected':''}>A4 แนวตั้ง</option><option value="landscape" ${or==='landscape'?'selected':''}>A4 แนวนอน</option></select></span>`;
+}
+function bindPickSumToggle(el){
+  const c=$('[data-sumtg]',el); if(c) c.onchange=()=>setPickOpt('pickSum', c.checked?'1':'0');
+  const k=$('[data-casetg]',el); if(k) k.onchange=()=>setPickOpt('pickCase', k.checked?'1':'0');
+  const o=$('[data-orienttg]',el); if(o) o.onchange=()=>setPickOpt('pickOrient', o.value);
+}
 /** ตัวเลือกก่อนพิมพ์ (จำในเครื่อง): ตารางรวมหยิบ / จำนวนลัง / แนวกระดาษ */
 function pickOpt(k, def){ try{ const v=localStorage.getItem('pt.'+k); if(v!==null) return v; }catch(e){} return def; }
 function setPickOpt(k, v){ try{ localStorage.setItem('pt.'+k, v); }catch(e){} }
@@ -2274,8 +2287,9 @@ async function printPickList(only){
     #printArea .sign{display:flex;gap:40px;margin-top:24px}#printArea .sign div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center}
     @media print{@page{size:A4 ${o.orient};margin:12mm}}`;
   const opts=[{key:'sum', label:'รวมจำนวนหยิบ', on:o.sum},
-    {key:'cases', label:'จำนวนลัง', on:o.cases, disabled:!hasCase, hint:hasCase?'แสดงช่องจำนวนลัง':(S.casesErr||'ยังไม่มีข้อมูลจำนวนต่อลังของสินค้าในใบนี้ (นำเข้าที่ ⚙)')},
-    {key:'orient', type:'select', label:'แนวกระดาษ', value:o.orient, choices:[['portrait','แนวตั้ง'],['landscape','แนวนอน']]}];
+    {key:'cases', label:'จำนวนลัง', on:o.cases && hasCase, hint:'แสดงช่องจำนวนลัง',
+      why:hasCase?'':(S.casesErr || (S.cases&&S.cases.length ? 'สินค้าในใบนี้ไม่มีในรายการจำนวนต่อลัง (ดู ⚙ → จำนวนต่อลัง → ดูรายการ)' : 'ยังไม่ได้นำเข้าจำนวนต่อลัง — กด ⚙ → จำนวนต่อลัง → นำเข้าไฟล์ Excel'))},
+    {key:'orient', type:'select', label:'กระดาษ', value:o.orient, choices:[['portrait','A4 แนวตั้ง'],['landscape','A4 แนวนอน']]}];
   showDocView(htmlOf(o), 'ใบจัดสินค้า • '+d.pos.length+' P.O.', {css:pcss(o), body:bodyOf(o), landscape:o.orient==='landscape', options:opts,
     change:(k,v)=>{
       o[k]=v;
@@ -2300,7 +2314,7 @@ function showDocView(html, title, printDoc){
   wrap.innerHTML=`<div class="bar"><span class="t">${h(title)}</span>
       ${opts.map(o=>o.type==='select'
         ? `<label class="doc-tg doc-sel" title="${h(o.label)}"><span class="hide-sm">${h(o.label)}</span><select data-opt="${h(o.key)}">${o.choices.map(c=>`<option value="${h(c[0])}" ${c[0]===o.value?'selected':''}>${h(c[1])}</option>`).join('')}</select></label>`
-        : `<label class="doc-tg ${o.disabled?'off':''}" title="${h(o.hint||o.label)}"><input type="checkbox" data-opt="${h(o.key)}" ${o.on&&!o.disabled?'checked':''} ${o.disabled?'disabled':''}><span>${h(o.label)}</span></label>`).join('')}
+        : `<label class="doc-tg ${o.why?'off':''}" title="${h(o.why||o.hint||o.label)}"><input type="checkbox" data-opt="${h(o.key)}" ${o.on?'checked':''}><span>${h(o.label)}</span></label>`).join('')}
       <button data-print title="พิมพ์ / บันทึกเป็น PDF">🖨 <span class="hide-sm">พิมพ์ / PDF</span></button>
       <button data-win title="เปิดในหน้าต่างใหม่">↗</button><button data-x title="ปิด">✕</button></div>
     <div class="doc-scroll"><div class="doc-page"><iframe title="${h(title)}"></iframe></div></div>
@@ -2329,6 +2343,8 @@ function showDocView(html, title, printDoc){
     try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ fail(new Error('พิมพ์จากหน้านี้ไม่ได้ — กด ↗ เพื่อเปิดในหน้าต่างใหม่แล้วพิมพ์')); }
   };
   $$('[data-opt]',wrap).forEach(el=>el.onchange=()=>{
+    const op=opts.find(x=>x.key===el.dataset.opt);
+    if(op && op.why && el.checked){ el.checked=false; toast(op.why, true); return; }
     const r=printDoc.change(el.dataset.opt, el.type==='checkbox' ? el.checked : el.value);
     html=r.html; if(r.css) printDoc.css=r.css; if(r.landscape!==undefined) PAGE_W=r.landscape ? 1160 : 820;
     fr.srcdoc=html; const p=$('#printArea'); if(p) p.innerHTML=`<style>${printDoc.css}</style>${r.body}`;
