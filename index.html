@@ -626,6 +626,70 @@ body.view-summary .fab{display:none}
 .ptable th{font-size:12px;color:var(--muted);font-weight:600}
 .ptable .r{white-space:nowrap}
 .ptable .bc{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* ---------- ออกบิล ---------- */
+.fab-bill{bottom:138px;background:var(--card);color:var(--accent);border:1.5px solid var(--accent)}
+.fab-bill[hidden]{display:none}
+.fab-bill .n{background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:1px 8px;font-size:12.5px;margin-left:4px}
+.fab-bill .n:empty{display:none}
+body:has(#btnAllocFab[hidden]) .fab-bill{bottom:78px}
+body.bulk-on .fab-bill{bottom:calc(var(--bbh,64px) + 134px)}
+body.bulk-on:has(#btnAllocFab[hidden]) .fab-bill{bottom:calc(var(--bbh,64px) + 74px)}
+body:has(#btnBillFab:not([hidden])) main{padding-bottom:210px}
+body.view-bill .fab{display:none}
+.tag.bill-tag{border:1px solid var(--accent);color:var(--accent);background:transparent}
+.tag.bill-tag.pending{border-color:var(--orange);color:var(--orange)}
+.pill.bill-st{font-size:12px;padding:2px 8px;border-radius:999px}
+.bill-st.pending{background:var(--orange-soft);color:var(--orange)}
+.bill-st.confirmed{background:var(--accent-soft);color:var(--accent)}
+.bill-st.cancelled{background:var(--soft);color:var(--muted)}
+.bc-list{display:grid;gap:6px;max-height:40vh;overflow:auto}
+.bc-po{border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.bc-warn{color:var(--orange);font-size:13px;margin-top:3px}
+.bill-list{display:grid;gap:8px}
+.bill-row{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer}
+.bill-row:hover{border-color:var(--accent)}
+.bill-row.asel{box-shadow:0 0 0 2px var(--accent)}
+.br-main{flex:1;min-width:0}
+.br-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.br-cust{font-weight:600;margin:2px 0;overflow-wrap:anywhere}
+.br-amt{text-align:right;flex:none}
+.br-amt b{display:block;font-size:17px}
+.modal-box.bill-box{max-width:min(1180px,97vw)}
+.bill-ed .be-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 12px}
+.bill-ed .be-wide{grid-column:span 2}
+.bill-ed textarea{width:100%;resize:vertical}
+.be-items{display:grid;gap:5px;border-top:1px solid var(--line);padding-top:8px}
+.be-row{display:grid;grid-template-columns:30px minmax(0,1fr) 84px 118px 96px 118px 40px;gap:6px;align-items:start}
+.be-head{font-size:12px;color:var(--muted);text-align:center;align-items:center}
+.be-row input{width:100%;min-width:0}
+.be-row input[type=number]{text-align:right}
+.be-row small{display:block;font-size:11px;margin-top:2px}
+.be-no{text-align:center;padding-top:9px;color:var(--muted)}
+.be-amt{text-align:right;padding-top:9px;font-weight:600}
+.be-miss{border-color:var(--red)!important}
+.be-btns{display:flex;gap:8px;flex-wrap:wrap}
+.be-foot{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:16px;align-items:start;border-top:1px solid var(--line);padding-top:10px}
+.be-tot{display:grid;gap:5px;font-size:14px}
+.bt-r{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.bt-r input{width:72px;text-align:right}
+.bt-total{font-size:18px;border-top:1px solid var(--line);padding-top:6px}
+.bp-list{display:grid;gap:6px}
+.bp-row{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.bp-row>div:first-child{min-width:0;overflow-wrap:anywhere}
+.bp-p{text-align:right;flex:none}
+.bp-p input{width:120px;text-align:right}
+.bp-p input.chg{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.bc-row{cursor:pointer}
+.bc-row:hover{border-color:var(--accent)}
+@media (max-width:760px){
+  .bill-ed .be-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .be-head{display:none}
+  .be-row{grid-template-columns:26px repeat(4,minmax(0,1fr)) 34px;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .be-row>.be-no{grid-row:span 2}
+  .be-row>span:nth-child(2){grid-column:2/-1}
+  .be-foot{grid-template-columns:1fr}
+  .bp-p input{width:96px}
+}
 </style>
 </head>
 <body>
@@ -642,9 +706,11 @@ body.view-summary .fab{display:none}
     <button class="tab on" data-view="list">รายการ P.O.</button>
     <button class="tab" data-view="summary">สรุปสินค้าที่ต้องจัด</button>
     <button class="tab" data-view="blogger">Blogger Tracker</button>
+    <button class="tab" data-view="bill">ออกบิล</button>
   </nav>
 </header>
 <main id="content"><div class="loading"><span class="spin"></span> กำลังโหลด…</div></main>
+<button class="fab fab-bill" id="btnBillFab" hidden>🧾 ออกบิล <span class="n" id="billN"></span></button>
 <button class="fab fab-alloc" id="btnAllocFab" hidden>📦 Allocate <span class="n" id="allocN"></span></button>
 <button class="fab" id="btnNew">＋ เพิ่ม P.O.</button>
 <div id="overlayRoot"></div>
@@ -1312,6 +1378,8 @@ function applyList(d, silent, fromCache){
   if(fromCache) return;                                 // ข้อมูลในเครื่อง: ยังไม่ตรวจไฟล์/ไม่ถาม รอข้อมูลจริง
   if(S.boot) LC.put(S.boot, d);
   setTimeout(runScreening, 2500); setTimeout(maybeAskReview, 4000);
+  // ข้อมูลบิล (ป้าย "ออกบิลแล้ว" บนการ์ด) — เซิร์ฟเวอร์เก่าไม่มีคำสั่งนี้ก็ข้ามไป
+  if(!S.billTried){ S.billTried=true; loadBills().then(b=>{ if(b && S.view==='list') renderWhenIdle(render); }); }
 }
 
 function bindTop(){
@@ -1320,6 +1388,7 @@ function bindTop(){
   $('#btnUser').onclick=openUserMenu;
   $('#btnNew').onclick=()=>openNewPo();
   $('#btnAllocFab').onclick=openAllocMenu;
+  $('#btnBillFab').onclick=()=>openBillCreate().catch(fail);
   $('#btnImport').onclick=importNow;
   $('#btnSettings').onclick=openSettings;
 }
@@ -1343,8 +1412,11 @@ async function importNow(){
 function render(){
   document.body.classList.toggle('view-summary', S.view==='summary');
   document.body.classList.toggle('view-blogger', S.view==='blogger');
+  document.body.classList.toggle('view-bill', S.view==='bill');
   updateAllocFab();
+  if(S.view!=='bill'){ const bb=$('#billBar'); if(bb) bb.remove(); }
   if(S.view==='blogger'){ renderBlogger(); if(S.detail) renderDetail(); return; }
+  if(S.view==='bill'){ renderBills(); if(S.detail) renderDetail(); return; }
   if(S.view==='summary') renderSummary(); else renderList();
   if(S.detail) renderDetail();
 }
@@ -1563,6 +1635,7 @@ function cardHtml(po){
       ${po.warnings?'<span class="tag warn">⚠ ตรวจข้อมูล</span>':''}
       ${s.out+s.partial?`<span class="tag warn">ขาด ${s.out+s.partial} รายการ</span>`:''}
       ${po.appointment?`<span class="tag">🗓 นัดส่ง ${h(thDateTime(po.appointment.replace('T',' ')))}</span>`:''}
+      ${billPill(po)}
       <span class="tags-end">${endTagsHtml(po)}</span>
     </div>
     <div class="mini-steps">${STATUSES.map((x,i)=>`<i class="${i<=idx?'on':''}"></i>`).join('')}</div>
@@ -1801,6 +1874,463 @@ async function importItemsExcel(po, file){
   $('[data-ok]',md.el).onclick=()=>{ md.close(); saveItems(updates, 'อัปเดตจาก Excel แล้ว '+updates.length+' รายการ'); };
 }
 
+/* =========================================================
+ * ออกบิล (ใบส่งของ / ใบกำกับภาษี / ใบแจ้งหนี้)
+ * แยกจากระบบ P.O.: อ่านรายการจาก P.O. (จำนวนพร้อมส่ง) มาคิดราคาในแท็บนี้เท่านั้น ไม่แก้ข้อมูล P.O.
+ * ราคาจำต่อร้าน ต่อสินค้า (คีย์ในบิลแล้วบันทึก = ราคาประจำร้าน ใช้กับบิลถัดไปอัตโนมัติ)
+ * ========================================================= */
+S.bill=null; S.bf={tab:'pending', q:'', sel:{}, pcust:''};
+const BILL_OK_ST=['PICKED','READY','SHIPPED'];      // ออกบิลได้ตั้งแต่ขั้น 3 กำลังจัดเตรียมสินค้า
+const VAT_RATE=0.07, BILL_ROWS=20;
+const BILL_ST={pending:'รอ Confirm', confirmed:'Confirm แล้ว', cancelled:'ยกเลิก'};
+const EN_MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const m2=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2});
+const r2=x=>Math.round((Number(x)||0)*100)/100;
+function enDate(ymd){ if(!/^\d{4}-\d{2}-\d{2}/.test(ymd||'')) return ymd||''; const [y,m,d]=ymd.slice(0,10).split('-').map(Number); return d+' '+EN_MONTHS[m-1]+' '+y; }
+
+async function loadBills(force){
+  if(S.bill && !force) return S.bill;
+  try{ S.bill=await call('billData'); S.billErr=''; }
+  catch(e){ S.billErr=/ไม่รู้จักคำสั่ง/.test(e.message)?'ต้องอัปเดต Code.gs เป็นเวอร์ชัน 1.9.0 ก่อน (วางโค้ดใหม่แล้ว Deploy → New version)':e.message; }
+  return S.bill;
+}
+function billsOfPo(id){ return S.bill ? S.bill.bills.filter(b=>b.status!=='cancelled' && b.po_ids.indexOf(id)>=0) : []; }
+function billPill(po){
+  return billsOfPo(po.id).map(b=>`<span class="tag bill-tag ${b.status}">🧾 ${h(b.inv_no)} • ${BILL_ST[b.status]}</span>`).join('');
+}
+function billPriceOf(cust, sku, bc){
+  const L=(S.bill && S.bill.prices)||[], s=String(sku||'').toUpperCase();
+  return (s && L.find(p=>p.customer===cust && String(p.sku).toUpperCase()===s)) || (bc && L.find(p=>p.customer===cust && p.barcode===String(bc))) || null;
+}
+function billCustOf(cust){ return ((S.bill && S.bill.customers)||[]).find(c=>c.customer===cust) || null; }
+
+/** รายการในบิลจาก P.O. (จำนวน = จำนวนพร้อมส่ง ถ้ายังไม่เช็คใช้จำนวนสั่ง; สินค้าเดียวกันหลายใบรวมเป็นบรรทัดเดียว) */
+function billItemsFrom(pos, cust){
+  const map={}, out=[];
+  pos.forEach(po=>pickNonZero(pickRows(po)).forEach(r=>{
+    const key=String(r.sku||r.barcode||r.name).toUpperCase();
+    let it=map[key];
+    if(!it){ const pr=billPriceOf(cust, r.sku, r.barcode);
+      it=map[key]={sku:r.sku||'', barcode:r.barcode||'', name:r.name||'', qty:0, price:pr?pr.price:'', disc:0}; out.push(it); }
+    it.qty+=Number(r.pick)||0;
+  }));
+  return out;
+}
+function billCalc(b){
+  const lines=(b.items||[]).map(it=>r2((Number(it.qty)||0)*(Number(it.price)||0)-(Number(it.disc)||0)));
+  const sub=r2(lines.reduce((a,x)=>a+x,0)), disc=r2(sub*(Number(b.discount_pct)||0)/100), after=r2(sub-disc);
+  let before, vat, total;
+  if(b.vat_mode==='excl'){ before=after; vat=r2(after*VAT_RATE); total=r2(before+vat); }
+  else if(b.vat_mode==='none'){ before=after; vat=0; total=after; }
+  else { total=after; before=r2(after/(1+VAT_RATE)); vat=r2(total-before); }
+  return {lines, sub, disc, before, vat, total};
+}
+/** จำนวนเงินเป็นตัวอักษร เช่น 71,986 → เจ็ดหมื่นหนึ่งพันเก้าร้อยแปดสิบหกบาทถ้วน */
+function bahtText(n){
+  const D=['ศูนย์','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'], P=['','สิบ','ร้อย','พัน','หมื่น','แสน'];
+  const rd=s=>{ let o=''; const L=s.length; for(let i=0;i<L;i++){ const d=+s[i], p=L-i-1; if(!d) continue;
+    o += p===1&&d===1 ? 'สิบ' : p===1&&d===2 ? 'ยี่สิบ' : p===0&&d===1&&L>1 ? 'เอ็ด' : D[d]+P[p]; } return o; };
+  const big=s=>s.length>6 ? big(s.slice(0,-6))+'ล้าน'+rd(s.slice(-6)) : rd(s);
+  const [i,f]=Math.abs(r2(n)).toFixed(2).split('.');
+  return (n<0?'ลบ':'')+(+i?big(String(+i)):'ศูนย์')+'บาท'+(+f?rd(String(+f))+'สตางค์':'ถ้วน');
+}
+function newBillFrom(pos, date){
+  const cust=pos[0].customer||'', prof=billCustOf(cust)||{};
+  const c={name:prof.name||cust, address:prof.address||'', tax_id:prof.tax_id||'', code:prof.code||'', term:prof.term||'',
+    term_days:Number(prof.term_days)||0, salesman:prof.salesman||''};
+  const b={customer:cust, cust:c, doc_date:date, due_date:c.term_days?addDays(date,c.term_days):'', po_ids:pos.map(p=>p.id),
+    po_nos:pos.map(p=>p.po_no).join(', '), items:billItemsFrom(pos,cust), remark:'', discount_pct:0, vat_mode:'incl'};
+  const t=billCalc(b); b.subtotal=t.sub; b.total=t.total;
+  return b;
+}
+
+/* ---------- ปุ่มลอย "ออกบิล" (หน้ารายการ P.O.) ---------- */
+function billSelected(){ return filteredPos().filter(p=>BILL_OK_ST.indexOf(p.status)>=0 && S.allocSel[p.id]); }
+function updateBillFab(){
+  const b=$('#btnBillFab'); if(!b) return;
+  b.hidden = S.view!=='list';
+  const n=billSelected().length; $('#billN').textContent = n ? n+' ใบ' : '';
+}
+async function openBillCreate(){
+  const f=S.filter;
+  if(BILL_OK_ST.indexOf(f.status)<0){ f.status='PICKED'; f.due=''; S.allocSel={}; renderList(); toast('ติ๊กเลือก P.O. ที่จะออกบิล (หัวข้อ 3 กำลังจัดเตรียมสินค้า / 4 พร้อมส่ง / 5 ส่งแล้ว)'); return; }
+  const sel=billSelected();
+  if(!sel.length){ toast('ติ๊กเลือก P.O. ที่จะออกบิลก่อน (ช่องมุมซ้ายบนของการ์ด)', true); return; }
+  if(!await loadBills()){ fail(new Error(S.billErr)); return; }
+  const custs=[...new Set(sel.map(p=>p.customer))];
+  const md=openModal(`<div class="modal-head">🧾 ออกบิล ${sel.length} P.O.</div><div class="modal-body">
+    <div class="bc-list">${sel.map(p=>{ const ex=billsOfPo(p.id), n=pickNonZero(pickRows(p)).length;
+      return `<div class="bc-po"><b>${h(p.customer)}</b> • P.O. ${h(p.po_no)} <span class="ref">${n} รายการ</span>
+        ${ex.length?`<div class="bc-warn">⚠ มีบิลแล้ว: ${ex.map(b=>h(b.inv_no)+' ('+BILL_ST[b.status]+')').join(', ')}</div>`:''}
+        ${n?'':'<div class="bc-warn">⚠ ไม่มีสินค้าที่จำนวนพร้อมส่งมากกว่า 0</div>'}</div>`; }).join('')}</div>
+    <div class="f"><label>ออกบิลแบบ</label>
+      <label class="sum-tg"><input type="radio" name="bcMode" value="each" checked> แยกบิลละ P.O. (${sel.length} บิล)</label>
+      <label class="sum-tg"><input type="radio" name="bcMode" value="group"> รวมเป็นบิลเดียวต่อลูกค้า (${custs.length} บิล${custs.length>1?' — '+custs.map(h).join(', '):''})</label></div>
+    <div class="f"><label>วันที่บิล</label><input type="date" id="bcDate" value="${h(S.today)}"></div>
+    <div class="ref">ระบบสร้างบิลสถานะ “รอ Confirm” ดึงราคาล่าสุดของร้านให้อัตโนมัติ แล้วเปิดให้ตรวจ/แก้ราคาได้ในแท็บ “ออกบิล” — ไม่แก้ข้อมูลใน P.O.</div>
+  </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>🧾 สร้างบิล</button></div>`, true);
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=async()=>{
+    const mode=$('input[name=bcMode]:checked',md.el).value, date=$('#bcDate',md.el).value||S.today;
+    const groups = mode==='each' ? sel.map(p=>[p]) : custs.map(c=>sel.filter(p=>p.customer===c));
+    const bills=groups.map(g=>newBillFrom(g, date)).filter(b=>b.items.length);
+    if(!bills.length){ toast('ไม่มีสินค้าที่จะออกบิล', true); return; }
+    const btn=$('[data-ok]',md.el); btn.disabled=true; btn.textContent='กำลังสร้างบิล…';
+    try{
+      const r=await call('billSave',{bills}); S.bill=r; md.close();
+      sel.forEach(p=>delete S.allocSel[p.id]);
+      S.bf.tab='pending'; goView('bill');
+      toast('สร้างบิลแล้ว '+r.saved.length+' ใบ — ตรวจราคาแล้วกด Confirm');
+      if(r.saved.length===1) openBillEditor(r.saved[0]);
+    }catch(e){ fail(e); btn.disabled=false; btn.textContent='🧾 สร้างบิล'; }
+  };
+}
+function goView(v){ S.view=v; $$('.tab').forEach(x=>x.classList.toggle('on',x.dataset.view===v)); render(); }
+
+/* ---------- แท็บออกบิล ---------- */
+async function renderBills(){
+  const c=$('#content');
+  if(!S.bill){
+    c.innerHTML='<div class="loading"><span class="spin"></span> กำลังโหลดข้อมูลบิล…</div>';
+    await loadBills(); if(S.view!=='bill') return;
+    if(!S.bill){ c.innerHTML=`<div class="empty">โหลดข้อมูลบิลไม่ได้: ${h(S.billErr)}</div>`; return; }
+  }
+  const f=S.bf, B=S.bill.bills, cnt=st=>B.filter(b=>b.status===st).length;
+  const sumOf=list=>list.reduce((a,b)=>a+(Number(b.total)||0),0), mon=S.today.slice(0,7);
+  const tabs=[['pending','⏳ รอ Confirm',cnt('pending')],['confirmed','✓ Confirm แล้ว',cnt('confirmed')],['cancelled','ยกเลิก',cnt('cancelled')],
+    ['prices','💲 ราคาร้านค้า',''],['custs','🏢 ข้อมูลลูกค้าในบิล','']];
+  let html=`<div class="kpis">
+      <button class="kpi orange ${f.tab==='pending'?'on':''}" data-bt="pending"><b>${num(cnt('pending'))}</b><span>รอ Confirm • ${m2(sumOf(B.filter(b=>b.status==='pending')))} ฿</span></button>
+      <button class="kpi ${f.tab==='confirmed'?'on':''}" data-bt="confirmed"><b>${num(B.filter(b=>b.status==='confirmed'&&String(b.doc_date).slice(0,7)===mon).length)}</b><span>Confirm แล้วเดือนนี้ • ${m2(sumOf(B.filter(b=>b.status==='confirmed'&&String(b.doc_date).slice(0,7)===mon)))} ฿</span></button>
+    </div>
+    <div class="chips">${tabs.map(([k,l,n])=>`<button class="chip ${f.tab===k?'on':''}" data-bt="${k}">${h(l)}${n!==''?'<span class="n">'+n+'</span>':''}</button>`).join('')}</div>`;
+  if(f.tab==='prices'){ c.innerHTML=html+billPricesHtml(); bindBillTabs(); bindBillPrices(); return; }
+  if(f.tab==='custs'){ c.innerHTML=html+billCustsHtml(); bindBillTabs(); bindBillCusts(); return; }
+  const q=f.q.trim().toLowerCase();
+  const list=B.filter(b=>b.status===f.tab && (!q || [b.inv_no,b.customer,b.cust.name,b.po_nos].join(' ').toLowerCase().indexOf(q)>=0))
+    .sort((a,b)=>String(b.doc_date).localeCompare(String(a.doc_date)) || String(b.inv_no).localeCompare(String(a.inv_no)));
+  Object.keys(f.sel).forEach(id=>{ if(!list.some(b=>b.id===id)) delete f.sel[id]; });
+  const allOn=list.length && list.every(b=>f.sel[b.id]);
+  html+=`<div class="filters"><input id="bq" type="search" placeholder="🔎 ค้นหา เลขที่บิล / ลูกค้า / เลข P.O." value="${h(f.q)}"></div>
+    ${list.length?`<div class="bulk-row"><label><input type="checkbox" id="bSelAll" ${allOn?'checked':''}> เลือกทั้งหมด (${list.length} บิล)</label><span>ติ๊กหลายบิลเพื่อพิมพ์ / Confirm พร้อมกัน</span></div>`:''}
+    <div class="bill-list">${list.length?list.map(b=>{ const t=billCalc(b), miss=b.items.filter(it=>!(Number(it.price)>0)).length;
+      return `<div class="bill-row ${f.sel[b.id]?'asel':''}" data-bid="${h(b.id)}">
+        <label class="card-ck" data-bck><input type="checkbox" ${f.sel[b.id]?'checked':''}></label>
+        <div class="br-main"><div class="br-top"><b>${h(b.inv_no)}</b><span class="ref">${h(enDate(b.doc_date))}</span>
+          <span class="pill bill-st ${b.status}">${BILL_ST[b.status]}</span></div>
+          <div class="br-cust">${h(b.cust.name||b.customer)}</div>
+          <div class="ref">P.O. ${h(b.po_nos||'-')} • ${b.items.length} รายการ${miss?` • <span class="zero">ยังไม่มีราคา ${miss} รายการ</span>`:''}
+            ${b.status==='confirmed'?' • Confirm โดย '+h(b.confirmed_by)+' '+h(thDateTime(b.confirmed_at)):' • สร้างโดย '+h(b.created_by)}</div></div>
+        <div class="br-amt"><b>${m2(t.total)}</b><span class="ref">บาท</span></div></div>`; }).join('')
+      : `<div class="empty">ไม่มีบิล${f.tab==='pending'?'ที่รอ Confirm<br><br>ไปที่ “รายการ P.O.” หัวข้อ 3 กำลังจัดเตรียมสินค้า → ติ๊กเลือก P.O. → ปุ่ม 🧾 ออกบิล':''}</div>`}</div>`;
+  c.innerHTML=html; bindBillTabs();
+  const bq=$('#bq'); bq.oninput=()=>{ f.q=bq.value; clearTimeout(bq._t); bq._t=setTimeout(()=>{ renderBills(); const n=$('#bq'); n.focus(); n.setSelectionRange(n.value.length,n.value.length); },250); };
+  const sa=$('#bSelAll'); if(sa) sa.onchange=()=>{ list.forEach(b=>{ if(sa.checked) f.sel[b.id]=true; else delete f.sel[b.id]; }); renderBills(); };
+  $$('.bill-row').forEach(r=>r.onclick=e=>{ if(e.target.closest('[data-bck]')) return; openBillEditor(r.dataset.bid); });
+  $$('.bill-row [data-bck]').forEach(l=>{ const cb=$('input',l), id=l.closest('.bill-row').dataset.bid;
+    cb.onchange=()=>{ if(cb.checked) f.sel[id]=true; else delete f.sel[id]; renderBills(); }; });
+  updateBillBar(list.filter(b=>f.sel[b.id]));
+}
+function bindBillTabs(){ $$('[data-bt]').forEach(b=>b.onclick=()=>{ if(S.bf.tab!==b.dataset.bt) S.bf.sel={}; S.bf.tab=b.dataset.bt; renderBills(); }); updateBillBar([]); }
+function updateBillBar(sel){
+  let bar=$('#billBar');
+  document.body.classList.toggle('bulk-on', !!sel.length && S.view==='bill');
+  if(!sel.length || S.view!=='bill'){ if(bar) bar.remove(); return; }
+  if(!bar){ bar=document.createElement('div'); bar.id='billBar'; bar.className='bulk-bar'; document.body.appendChild(bar); }
+  const tab=S.bf.tab;
+  bar.innerHTML=`<b>เลือก ${sel.length} บิล</b>
+    <button class="btn" data-bb="print">🖨 พิมพ์</button>
+    ${tab==='pending'?'<button class="btn primary" data-bb="confirm">✓ Confirm</button>':''}
+    ${tab==='confirmed'?'<button class="btn" data-bb="unconfirm">↩ ยกเลิก Confirm</button>':''}
+    <button class="btn" data-bb="x" title="ยกเลิกที่เลือก">✕</button>`;
+  $$('[data-bb]',bar).forEach(b=>b.onclick=async()=>{
+    const k=b.dataset.bb;
+    if(k==='x'){ S.bf.sel={}; renderBills(); return; }
+    if(k==='print'){ printBills(sel); return; }
+    if(k==='confirm'){
+      const miss=sel.filter(x=>x.items.some(it=>!(Number(it.price)>0)));
+      if(!await confirmBox('Confirm '+sel.length+' บิล', sel.map(x=>'• '+x.inv_no+' '+(x.cust.name||x.customer)+' '+m2(billCalc(x).total)+' บาท').join('\n')
+        +(miss.length?'\n\n⚠ มีบิลที่ยังไม่มีราคาบางรายการ: '+miss.map(x=>x.inv_no).join(', '):''), '✓ Confirm')) return;
+    }
+    try{ S.bill=await call('billStatus',{ids:sel.map(x=>x.id), status:k==='confirm'?'confirmed':'pending'}); S.bf.sel={}; renderBills(); toast('อัปเดตแล้ว '+sel.length+' บิล'); }
+    catch(e){ fail(e); }
+  });
+  document.body.style.setProperty('--bbh', bar.offsetHeight+'px');
+}
+
+/* ---------- หน้าแก้บิล ---------- */
+function openBillEditor(id){
+  const src=S.bill.bills.find(b=>b.id===id); if(!src) return;
+  const E=JSON.parse(JSON.stringify(src)); E.saveCustomer=false;
+  const lock=E.status!=='pending', dis=lock?'disabled':'';
+  const md=openModal(`<div class="modal-head">🧾 บิล ${h(E.inv_no)} <span class="pill bill-st ${E.status}" style="margin-left:8px">${BILL_ST[E.status]}</span></div>
+    <div class="modal-body bill-ed">
+      ${lock?`<div class="alert info">${E.status==='confirmed'?'Confirm แล้วโดย '+h(E.confirmed_by)+' '+h(thDateTime(E.confirmed_at))+' — ยกเลิก Confirm ก่อนจึงแก้ไขได้':'บิลนี้ถูกยกเลิกแล้ว'}</div>`:''}
+      <div class="be-grid">
+        <div class="f"><label>เลขที่บิล</label><input data-k="inv_no" value="${h(E.inv_no)}" ${dis}></div>
+        <div class="f"><label>วันที่</label><input type="date" data-k="doc_date" value="${h(E.doc_date)}" ${dis}></div>
+        <div class="f"><label>เลขที่ใบสั่งซื้อ (P.O.)</label><input data-k="po_nos" value="${h(E.po_nos)}" ${dis}></div>
+        <div class="f be-wide"><label>ชื่อลูกค้า (ตามใบกำกับภาษี)</label><input data-c="name" value="${h(E.cust.name)}" ${dis}></div>
+        <div class="f"><label>เลขประจำตัวผู้เสียภาษี</label><input data-c="tax_id" value="${h(E.cust.tax_id)}" ${dis}></div>
+        <div class="f be-wide"><label>ที่อยู่</label><textarea data-c="address" rows="2" ${dis}>${h(E.cust.address)}</textarea></div>
+        <div class="f"><label>รหัสลูกค้า</label><input data-c="code" value="${h(E.cust.code)}" ${dis}></div>
+        <div class="f"><label>เงื่อนไขการชำระเงิน</label><input data-c="term" value="${h(E.cust.term)}" placeholder="เช่น เครดิต 30 วัน" ${dis}></div>
+        <div class="f"><label>เครดิต (วัน)</label><input type="number" min="0" data-c="term_days" value="${h(E.cust.term_days||'')}" ${dis}></div>
+        <div class="f"><label>วันครบกำหนดชำระ</label><input type="date" data-k="due_date" value="${h(E.due_date)}" ${dis}></div>
+        <div class="f"><label>พนักงานขาย</label><input data-c="salesman" value="${h(E.cust.salesman)}" ${dis}></div>
+      </div>
+      ${lock?'':`<label class="sum-tg"><input type="checkbox" id="beSaveCust" ${billCustOf(E.customer)?'':'checked'}> จำข้อมูลลูกค้านี้ไว้ใช้กับบิลถัดไปของ “${h(E.customer)}”</label>`}
+      <div class="be-items" id="beItems"></div>
+      ${lock?'':`<div class="be-btns"><button class="btn sm" data-add>＋ เพิ่มรายการ</button>
+        ${E.po_ids.length?'<button class="btn sm" data-repo title="ดึงรายการ/จำนวนพร้อมส่งล่าสุดจาก P.O. (ราคาเดิมไม่หาย)">↻ ดึงจำนวนจาก P.O. ล่าสุด</button>':''}</div>`}
+      <div class="be-foot">
+        <div class="f be-remark"><label>หมายเหตุในบิล (กล่องซ้ายล่าง)</label><textarea data-k="remark" rows="3" ${dis}>${h(E.remark)}</textarea></div>
+        <div class="be-tot" id="beTot"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      ${E.status==='pending'?'<button class="btn danger" data-cancel>ยกเลิกบิล</button>':''}
+      <span style="flex:1"></span>
+      <button class="btn" data-x>ปิด</button>
+      <button class="btn" data-print>🖨 ดูใบบิล</button>
+      ${E.status==='pending'?'<button class="btn" data-save>💾 บันทึก</button><button class="btn primary" data-confirm>✓ บันทึก + Confirm</button>':''}
+      ${E.status==='confirmed'?'<button class="btn" data-unconfirm>↩ ยกเลิก Confirm</button>':''}
+    </div>`, true);
+  md.el.querySelector('.modal-box').classList.add('xwide','bill-box');
+  let dirty=false;
+  const drawItems=()=>{
+    const t=billCalc(E);
+    $('#beItems',md.el).innerHTML=`<div class="be-row be-head"><span>#</span><span>รายการสินค้า</span><span>จำนวน</span><span>หน่วยละ</span><span>ส่วนลด</span><span>ราคารวม</span><span></span></div>`+
+      E.items.map((it,i)=>{ const pr=billPriceOf(E.customer, it.sku, it.barcode), noP=!(Number(it.price)>0);
+        return `<div class="be-row" data-i="${i}"><span class="be-no">${i+1}</span>
+          <span><input data-f="name" value="${h(it.name)}" ${dis}><small class="ref">${h([it.sku,it.barcode].filter(Boolean).join(' • '))}</small></span>
+          <span><input type="number" min="0" data-f="qty" value="${h(it.qty)}" ${dis}></span>
+          <span><input type="number" min="0" step="0.01" data-f="price" class="${noP?'be-miss':''}" value="${h(it.price)}" placeholder="ราคา" ${dis}>
+            <small class="ref ${noP?'zero':''}">${noP?'ยังไม่มีราคา':pr&&Number(pr.price)!==Number(it.price)?'ล่าสุด '+m2(pr.price):pr?'ราคาประจำร้าน':'ราคาใหม่'}</small></span>
+          <span><input type="number" min="0" step="0.01" data-f="disc" value="${h(it.disc||'')}" placeholder="0" ${dis}></span>
+          <span class="be-amt">${m2(t.lines[i])}</span>
+          <span>${lock?'':'<button class="btn sm" data-del title="ลบรายการ">✕</button>'}</span></div>`; }).join('');
+    drawTot();
+    $$('#beItems [data-f]',md.el).forEach(inp=>inp.oninput=()=>{ const it=E.items[inp.closest('.be-row').dataset.i], k=inp.dataset.f;
+      it[k]= k==='name' ? inp.value : inp.value; dirty=true; drawTot();
+      const row=inp.closest('.be-row'); row.querySelector('.be-amt').textContent=m2(billCalc(E).lines[row.dataset.i]);
+      if(k==='price') inp.classList.toggle('be-miss', !(Number(inp.value)>0)); });
+    $$('#beItems [data-del]',md.el).forEach(b=>b.onclick=()=>{ E.items.splice(b.closest('.be-row').dataset.i,1); dirty=true; drawItems(); });
+  };
+  const drawTot=()=>{
+    const t=billCalc(E);
+    $('#beTot',md.el).innerHTML=`
+      <div class="bt-r"><span>รวมราคาสินค้า</span><b>${m2(t.sub)}</b></div>
+      <div class="bt-r"><span>ส่วนลดท้ายบิล <input type="number" min="0" max="100" step="0.01" id="beDisc" value="${h(E.discount_pct||0)}" ${dis}> %</span><b>${m2(t.disc)}</b></div>
+      <div class="bt-r"><span>ภาษี <select id="beVat" ${dis}><option value="incl" ${E.vat_mode==='incl'?'selected':''}>ราคารวม VAT แล้ว</option>
+        <option value="excl" ${E.vat_mode==='excl'?'selected':''}>ราคายังไม่รวม VAT (+7%)</option><option value="none" ${E.vat_mode==='none'?'selected':''}>ไม่มี VAT</option></select></span><span></span></div>
+      <div class="bt-r"><span>ราคาสุทธิก่อนภาษี</span><b>${m2(t.before)}</b></div>
+      <div class="bt-r"><span>ภาษีมูลค่าเพิ่ม 7%</span><b>${m2(t.vat)}</b></div>
+      <div class="bt-r bt-total"><span>รวมเงินทั้งสิ้น</span><b>${m2(t.total)}</b></div>
+      <div class="ref" style="text-align:right">(${bahtText(t.total)})</div>`;
+    const d=$('#beDisc',md.el); d.oninput=()=>{ E.discount_pct=d.value; dirty=true; const k=d.selectionStart; drawTot(); const n=$('#beDisc',md.el); n.focus(); try{ n.setSelectionRange(k,k); }catch(e){} };
+    $('#beVat',md.el).onchange=e=>{ E.vat_mode=e.target.value; dirty=true; drawTot(); };
+  };
+  drawItems();
+  $$('[data-k]',md.el).forEach(inp=>inp.oninput=()=>{ E[inp.dataset.k]=inp.value; dirty=true; });
+  $$('[data-c]',md.el).forEach(inp=>inp.oninput=()=>{ E.cust[inp.dataset.c]=inp.value; dirty=true;
+    if(inp.dataset.c==='term_days'){ const n=Number(inp.value)||0; E.due_date=n?addDays(E.doc_date||S.today,n):''; $('[data-k=due_date]',md.el).value=E.due_date; } });
+  const docD=$('[data-k=doc_date]',md.el); if(docD) docD.onchange=()=>{ const n=Number(E.cust.term_days)||0; if(n){ E.due_date=addDays(docD.value,n); $('[data-k=due_date]',md.el).value=E.due_date; } };
+  const add=$('[data-add]',md.el); if(add) add.onclick=()=>{ E.items.push({sku:'',barcode:'',name:'',qty:1,price:'',disc:0}); dirty=true; drawItems(); };
+  const repo=$('[data-repo]',md.el); if(repo) repo.onclick=()=>{
+    const pos=E.po_ids.map(id=>S.pos.find(p=>p.id===id)).filter(Boolean);
+    if(!pos.length){ toast('ไม่พบ P.O. ในรายการที่โหลดไว้', true); return; }
+    const fresh=billItemsFrom(pos, E.customer), key=it=>String(it.sku||it.barcode||it.name).toUpperCase();
+    fresh.forEach(it=>{ const old=E.items.find(o=>key(o)===key(it)); if(old){ it.price=old.price; it.disc=old.disc; it.name=old.name||it.name; } });
+    E.items=fresh.concat(E.items.filter(o=>!o.sku && !o.barcode && !fresh.some(it=>key(it)===key(o))));   // รายการที่เพิ่มเอง (เช่น ค่าขนส่ง) เก็บไว้
+    dirty=true; drawItems(); toast('ดึงจำนวนล่าสุดจาก P.O. แล้ว');
+  };
+  const collect=()=>{ const sc=$('#beSaveCust',md.el); E.saveCustomer=!!(sc && sc.checked);
+    E.items=E.items.filter(it=>String(it.name||'').trim() || Number(it.qty)>0);
+    const t=billCalc(E); E.subtotal=t.sub; E.total=t.total; return E; };
+  const save=async(then)=>{
+    const b=collect(), miss=b.items.filter(it=>!(Number(it.price)>0)).length;
+    if(!b.items.length){ toast('บิลต้องมีอย่างน้อย 1 รายการ', true); return false; }
+    if(then==='confirm' && miss && !await confirmBox('ยังไม่มีราคา '+miss+' รายการ','ยืนยัน Confirm ทั้งที่บางรายการราคาเป็น 0 ?','Confirm ต่อ')) return false;
+    try{ S.bill=await call('billSave',{bills:[b]});
+      if(then==='confirm') S.bill=await call('billStatus',{ids:[b.id], status:'confirmed'});
+      dirty=false; return true; }catch(e){ fail(e); return false; }
+  };
+  $('[data-x]',md.el).onclick=async()=>{ if(dirty && !lock && !await confirmBox('ยังไม่ได้บันทึก','ปิดโดยไม่บันทึกการแก้ไข?','ปิดเลย',true)) return; md.close(); };
+  $('[data-print]',md.el).onclick=()=>printBills([lock?src:collect()]);
+  const sv=$('[data-save]',md.el); if(sv) sv.onclick=async()=>{ sv.disabled=true; if(await save()){ md.close(); renderBills(); toast('บันทึกบิลแล้ว (ราคาจำไว้ใช้บิลถัดไปของร้านนี้)'); } sv.disabled=false; };
+  const cf=$('[data-confirm]',md.el); if(cf) cf.onclick=async()=>{ cf.disabled=true; if(await save('confirm')){ md.close(); renderBills(); toast('Confirm บิล '+E.inv_no+' แล้ว'); } cf.disabled=false; };
+  const uc=$('[data-unconfirm]',md.el); if(uc) uc.onclick=async()=>{
+    try{ S.bill=await call('billStatus',{ids:[E.id], status:'pending'}); md.close(); renderBills(); openBillEditor(E.id); toast('ยกเลิก Confirm แล้ว — แก้ไขได้'); }catch(e){ fail(e); } };
+  const cc=$('[data-cancel]',md.el); if(cc) cc.onclick=async()=>{
+    if(!await confirmBox('ยกเลิกบิล '+E.inv_no,'บิลจะย้ายไปหัวข้อ “ยกเลิก” (ไม่ลบทิ้ง) และเลขที่บิลนี้นำไปใช้ใหม่ได้','ยกเลิกบิล',true)) return;
+    try{ S.bill=await call('billStatus',{ids:[E.id], status:'cancelled'}); md.close(); renderBills(); toast('ยกเลิกบิลแล้ว'); }catch(e){ fail(e); } };
+}
+
+/* ---------- ราคาร้านค้า ---------- */
+function billPriceCustomers(){
+  const set=new Set(((S.bill&&S.bill.prices)||[]).map(p=>p.customer));
+  S.pos.forEach(p=>{ if(p.customer) set.add(p.customer); });
+  return [...set].filter(Boolean).sort((a,b)=>a.localeCompare(b));
+}
+function billPricesHtml(){
+  const custs=billPriceCustomers(), f=S.bf;
+  if(!f.pcust || custs.indexOf(f.pcust)<0) f.pcust=custs.find(c=>S.bill.prices.some(p=>p.customer===c))||custs[0]||'';
+  const rows=S.bill.prices.filter(p=>p.customer===f.pcust).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+  return `<div class="filters"><select id="bpCust">${custs.map(c=>`<option ${c===f.pcust?'selected':''}>${h(c)}</option>`).join('')}</select>
+      <input id="bpQ" type="search" placeholder="🔎 ค้นหาสินค้า" value="${h(f.pq||'')}"></div>
+    <div class="ref">ราคาที่คีย์ในบิลจะถูกจำเป็นราคาประจำของร้านอัตโนมัติ — แก้ที่นี่ได้ (ช่องว่าง = ลบราคา) ประวัติแสดง 10 ครั้งล่าสุด</div>
+    <div class="bp-list">${rows.length?rows.map((p,i)=>`<div class="bp-row" data-i="${i}">
+        <div><b>${h(p.name||'-')}</b><div class="ref">${h([p.sku,p.barcode].filter(Boolean).join(' • '))}</div>
+          <div class="ref">${p.history.slice(1,4).map(x=>m2(x.price)+' ('+h(thDate(String(x.at).slice(0,10)))+(x.inv?' '+h(x.inv):'')+')').join(' ← ')}</div></div>
+        <div class="bp-p"><input type="number" min="0" step="0.01" value="${h(p.price)}" data-sku="${h(p.sku)}" data-bc="${h(p.barcode)}" data-name="${h(p.name)}">
+          <div class="ref">${h(thDateTime(p.updated_at))} • ${h(p.updated_by)}</div></div></div>`).join('')
+      : '<div class="empty">ยังไม่มีราคาของร้านนี้ — ราคาจะถูกจำเมื่อบันทึกบิลแรก หรือกด “＋ เพิ่มราคาสินค้า”</div>'}</div>
+    <div class="be-btns"><button class="btn sm" data-bpadd>＋ เพิ่มราคาสินค้า</button><button class="btn primary sm" data-bpsave>💾 บันทึกราคาที่แก้</button></div>`;
+}
+function bindBillPrices(){
+  const f=S.bf, sel=$('#bpCust'); if(sel) sel.onchange=()=>{ f.pcust=sel.value; renderBills(); };
+  const q=$('#bpQ'); if(q){ const flt=()=>{ const v=q.value.trim().toLowerCase(); f.pq=q.value;
+    $$('.bp-row').forEach(r=>r.style.display=!v||r.textContent.toLowerCase().indexOf(v)>=0?'':'none'); }; q.oninput=flt; flt(); }
+  $$('.bp-p input').forEach(i=>i.oninput=()=>i.classList.add('chg'));
+  $('[data-bpadd]').onclick=async()=>{
+    const code=await askText('เพิ่มราคาสินค้า — '+f.pcust,'พิมพ์ SKU หรือบาร์โค้ด','');
+    if(!code||!code.trim()) return;
+    const p=S.prod && S.prod.list && S.prod.list.find(x=>String(x.sku).toUpperCase()===code.trim().toUpperCase() || (x.barcodes||[]).indexOf(code.trim())>=0);
+    const price=await askText('ราคาต่อหน่วย', (p?p.name+'\n':'')+'ราคา (บาท)','','number'); if(!price) return;
+    try{ S.bill=await call('billPriceSave',{customer:f.pcust, rows:[{sku:p?p.sku:(/^\d{8,14}$/.test(code.trim())?'':code.trim()), barcode:p?(p.barcodes||[])[0]||'':(/^\d{8,14}$/.test(code.trim())?code.trim():''), name:p?p.name:code.trim(), price:Number(price)}]}); renderBills(); toast('บันทึกราคาแล้ว'); }
+    catch(e){ fail(e); }
+  };
+  $('[data-bpsave]').onclick=async()=>{
+    const rows=$$('.bp-p input.chg').map(i=>({sku:i.dataset.sku, barcode:i.dataset.bc, name:i.dataset.name, price:Number(i.value)||0}));
+    if(!rows.length){ toast('ยังไม่ได้แก้ราคา'); return; }
+    try{ S.bill=await call('billPriceSave',{customer:f.pcust, rows}); renderBills(); toast('บันทึกราคาแล้ว '+rows.length+' รายการ'); }catch(e){ fail(e); }
+  };
+}
+
+/* ---------- ข้อมูลลูกค้าในบิล + ผู้ขาย ---------- */
+function billCustsHtml(){
+  const custs=billPriceCustomers(), sl=S.bill.seller||{};
+  return `<div class="bp-list">${custs.map(c=>{ const p=billCustOf(c);
+      return `<div class="bp-row bc-row" data-cust="${h(c)}"><div><b>${h(c)}</b>
+        <div class="ref">${p?h(p.name)+(p.tax_id?' • '+h(p.tax_id):'')+(p.term?' • '+h(p.term):''):'<span class="zero">ยังไม่มีข้อมูลในบิล</span>'}</div></div>
+        <button class="btn sm">แก้ไข</button></div>`; }).join('')}</div>
+    <div class="set-sec"><h4>ผู้ขาย (หัวบิล)</h4><div class="ref">${h(sl.name_th)} • ${h(sl.tax_id)} • เลขที่บิลขึ้นต้น ${h(sl.inv_prefix)}</div>
+      ${S.me && S.me.role==='admin'?'<div><button class="btn sm" data-seller>แก้ข้อมูลผู้ขาย</button></div>':''}</div>`;
+}
+function bindBillCusts(){
+  $$('.bc-row').forEach(r=>r.onclick=()=>editBillCustomer(r.dataset.cust));
+  const s=$('[data-seller]'); if(s) s.onclick=editBillSeller;
+}
+function editBillCustomer(cust){
+  const p=billCustOf(cust)||{name:cust};
+  const F=[['name','ชื่อลูกค้า (ตามใบกำกับภาษี)'],['address','ที่อยู่'],['tax_id','เลขประจำตัวผู้เสียภาษี'],['code','รหัสลูกค้า'],['term','เงื่อนไขการชำระเงิน'],['term_days','เครดิต (วัน)'],['salesman','พนักงานขาย']];
+  const md=openModal(`<div class="modal-head">ข้อมูลลูกค้าในบิล — ${h(cust)}</div><div class="modal-body">
+    ${F.map(([k,l])=>`<div class="f"><label>${l}</label>${k==='address'?`<textarea data-c="${k}" rows="2">${h(p[k]||'')}</textarea>`:`<input data-c="${k}" value="${h(p[k]||'')}">`}</div>`).join('')}
+    <div class="ref">ใช้เติมให้อัตโนมัติเมื่อออกบิลใหม่ของลูกค้านี้ (บิลที่ออกไปแล้วไม่เปลี่ยน)</div>
+  </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>บันทึก</button></div>`, true);
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=async()=>{ const data={}; $$('[data-c]',md.el).forEach(i=>data[i.dataset.c]=i.value.trim());
+    try{ S.bill=await call('billCustomerSave',{customer:cust, data}); md.close(); renderBills(); toast('บันทึกข้อมูลลูกค้าแล้ว'); }catch(e){ fail(e); } };
+}
+function editBillSeller(){
+  const s=S.bill.seller||{};
+  const F=[['name_th','ชื่อบริษัท (ไทย)'],['name_en','ชื่อบริษัท (อังกฤษ)'],['address','ที่อยู่'],['phone','โทรศัพท์'],['tax_id','เลขประจำตัวผู้เสียภาษีอากร'],['inv_prefix','อักษรนำหน้าเลขที่บิล'],['footer','ข้อความท้ายบิล']];
+  const md=openModal(`<div class="modal-head">ข้อมูลผู้ขาย (หัวบิล)</div><div class="modal-body">
+    ${F.map(([k,l])=>`<div class="f"><label>${l}</label>${k==='footer'||k==='address'?`<textarea data-c="${k}" rows="2">${h(s[k]||'')}</textarea>`:`<input data-c="${k}" value="${h(s[k]||'')}">`}</div>`).join('')}
+  </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>บันทึก</button></div>`, true);
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=async()=>{ const data={}; $$('[data-c]',md.el).forEach(i=>data[i.dataset.c]=i.value);
+    try{ S.bill.seller=await call('billSellerSave',data); md.close(); renderBills(); toast('บันทึกข้อมูลผู้ขายแล้ว'); }catch(e){ fail(e); } };
+}
+
+/* ---------- ใบบิล (พิมพ์) — แบบเดียวกับใบส่งของ/ใบกำกับภาษีเดิมของบริษัท ---------- */
+const BILL_CSS=`.iv{width:194mm;margin:0 auto 8mm;box-sizing:border-box;padding:2mm 1mm;font-family:'Sarabun','Tahoma',sans-serif;font-size:9.6pt;line-height:1.25;color:#000;background:#fff;break-after:page;page-break-after:always}
+  .iv:last-child{break-after:auto;page-break-after:auto;margin-bottom:0}
+  .iv *{box-sizing:border-box}
+  .iv-top{display:flex;gap:10px;align-items:flex-start}
+  .iv-logo{width:78px;text-align:center;flex:none;padding-top:2px}.iv-logo img{width:70px;display:block;margin:0 auto;filter:brightness(0)}
+  .iv-logo small{display:block;font-size:6.5pt;letter-spacing:2.5px;margin-top:1px}
+  .iv-co{flex:1;font-size:9.3pt;line-height:1.32}.iv-co b{font-size:10.2pt}
+  .iv-copy{text-align:right;font-size:9pt;line-height:1.5;min-width:70px}
+  .iv-title{font-size:15pt;font-weight:700;margin:3mm 0 1.5mm}.iv-title span{font-size:12pt;font-weight:400;margin-left:6px}
+  .iv table{width:100%;border-collapse:collapse;table-layout:fixed}
+  .iv td,.iv th{border:1px solid #000;padding:1.2mm 1.6mm;vertical-align:top;font-weight:400}
+  .iv .lb{font-size:7.6pt;line-height:1.2;text-align:center}.iv .lb i{display:block;font-style:normal}
+  .iv .c{text-align:center}.iv .r{text-align:right}.iv .mid{vertical-align:middle}
+  .iv .gap{height:2mm}
+  .iv .items{margin-top:2mm}
+  .iv .items th{vertical-align:middle}
+  .iv .items tbody td{border-top:0;border-bottom:0;padding:.5mm 1.6mm;height:5.2mm;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .iv .items tbody tr:last-child td{border-bottom:1px solid #000}
+  .iv .tot td{padding:.9mm 1.6mm;vertical-align:middle}
+  .iv .tot .lb{text-align:left}
+  .iv .sign{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border:1px solid #000;border-top:0;font-size:7.8pt;min-height:30mm}
+  .iv .sign>div{border-left:1px solid #000;padding:1.5mm 2mm;display:flex;flex-direction:column;justify-content:space-between}
+  .iv .sign>div:first-child{border-left:0}
+  .iv .sign .ln{text-align:center;line-height:1.5}
+  .iv .foot{text-align:center;font-size:8pt;margin-top:1.5mm;line-height:1.35;white-space:pre-line}
+  @media print{@page{size:A4 portrait;margin:7mm 8mm}.iv{margin:0}}`;
+function billPageHtml(b, seller, copyLabel, pg, pages, rows, startNo, last){
+  const t=billCalc(b), c=b.cust||{}, logo=($('#logoImg')||{}).src||'', e=h;
+  const lines=rows.map((it,i)=>{ const amt=t.lines[b.items.indexOf(it)];
+    return `<tr><td class="c">${startNo+i}</td><td>${e(it.name)}</td><td class="c">${num(it.qty)}</td><td class="r">${m2(it.price)}</td>
+      <td class="r">${m2(it.disc)}</td><td class="r">${m2(amt)}</td><td class="r">${m2(amt)}</td></tr>`; }).join('');
+  const val=v=>last?m2(v):'';
+  return `<div class="iv">
+    <div class="iv-top"><div class="iv-logo">${logo?`<img src="${logo}" alt="2NK">`:'<b>2NK</b>'}<small>AGENCY</small></div>
+      <div class="iv-co"><b>${e(seller.name_th)}</b><br>${e(seller.name_en)}<br>${e(seller.address)}<br>${e(seller.phone)}<br>เลขประจำตัวผู้เสียภาษีอากร ${e(seller.tax_id)}</div>
+      <div class="iv-copy">${e(copyLabel)}<br>หน้าที่ ${pg}/${pages}</div></div>
+    <div class="iv-title">ใบส่งของ / ใบกำกับภาษี / ใบแจ้งหนี้<span>Delivery Order / Tax Invoice / Debit Note</span></div>
+    <table><colgroup><col style="width:13%"><col style="width:45%"><col style="width:20%"><col style="width:9%"><col style="width:13%"></colgroup>
+      <tr><td class="lb mid">ชื่อลูกค้า<i>NAME</i></td><td class="mid">${e(c.name||b.customer)}</td>
+        <td class="lb mid">รหัสประจำตัวผู้เสียภาษี<i>TAX INVOICE ID</i></td><td class="lb mid">วันที่<i>DATE</i></td><td class="c mid">${e(enDate(b.doc_date))}</td></tr>
+      <tr><td class="lb mid">ที่อยู่<i>ADDRESS</i></td><td style="height:13mm;white-space:pre-line">${e(c.address)}</td>
+        <td class="c mid">${e(c.tax_id)}</td><td class="lb mid">เลขที่<i>NO.</i></td><td class="c mid">${e(b.inv_no)}</td></tr></table>
+    <div class="gap"></div>
+    <table><colgroup><col style="width:17%"><col style="width:26%"><col style="width:19%"><col style="width:20%"><col style="width:18%"></colgroup>
+      <tr><td class="lb">รหัสลูกค้า<i>CUSTOMER ID</i></td><td class="lb">ใบสั่งซื้อเลขที่<i>PURCHASE ORDER NO</i></td><td class="lb">เงื่อนไขการชำระเงิน<i>TERM OF PAYMENT</i></td>
+        <td class="lb">วันครบกำหนดชำระเงิน<i>DUE DATE PAYMENT</i></td><td class="lb">พนักงานขาย<i>SALEMAN</i></td></tr>
+      <tr><td class="c">${e(c.code)}</td><td class="c">${e(b.po_nos)}</td><td class="c">${e(c.term)}</td><td class="c">${e(enDate(b.due_date))}</td><td class="c">${e(c.salesman)}</td></tr></table>
+    <div class="items"><table><colgroup><col style="width:6.5%"><col style="width:42.5%"><col style="width:8%"><col style="width:10.5%"><col style="width:9%"><col style="width:11.75%"><col style="width:11.75%"></colgroup>
+      <thead><tr><th class="lb">ลำดับ<i>NO</i></th><th class="lb">รายการสินค้า<i>DESCRIPTION</i></th><th class="lb">จำนวน<i>Qty.</i></th><th class="lb">หน่วยละ<i>UNIT PRICE</i></th>
+        <th class="lb">ส่วนลด<i>DISCOUNT</i></th><th class="lb">ราคาขาย<i>AMOUNT</i></th><th class="lb">ราคารวม<i>TOTAL</i></th></tr></thead>
+      <tbody>${lines}${Array.from({length:BILL_ROWS-rows.length},(_,i)=>`<tr><td></td><td class="c" style="color:#555">${!last&&i===0?'(มีต่อหน้าถัดไป)':''}</td><td></td><td></td><td></td><td></td><td></td></tr>`).join('')}</tbody></table></div>
+    <table class="tot"><colgroup><col style="width:9%"><col style="width:49%"><col style="width:24%"><col style="width:18%"></colgroup>
+      <tr><td colspan="2" rowspan="4" style="white-space:pre-line;vertical-align:top">${last?e(b.remark):''}</td><td class="lb">รวมราคาสินค้า<i>SUB TOTAL</i></td><td class="r">${val(t.sub)}</td></tr>
+      <tr><td class="lb">ส่วนลด ${last?e(Number(b.discount_pct)||0):''} %<i>DISCOUNT</i></td><td class="r">${val(t.disc)}</td></tr>
+      <tr><td class="lb">ราคาสุทธิก่อนภาษี<i>Total Without VAT</i></td><td class="r">${val(t.before)}</td></tr>
+      <tr><td class="lb">จำนวนภาษีมูลค่าเพิ่ม<i>VAT ${b.vat_mode==='none'?0:7} %</i></td><td class="r">${val(t.vat)}</td></tr>
+      <tr><td class="lb mid">บาท<i>BAHT</i></td><td class="c mid">${last?e(bahtText(t.total)):''}</td><td class="lb">รวมจำนวนเงินทั้งสิ้น<i>TOTAL AMOUNT</i></td><td class="r mid"><b>${val(t.total)}</b></td></tr></table>
+    <div class="sign">
+      <div><div>ได้รับสินค้าตามรายการข้างบนไว้<br>ถูกต้องในสภาพเรียบร้อยแล้ว</div><div class="ln">........................................<br>ผู้รับสินค้า / RECEIVER<br>วันที่........./........./.........</div></div>
+      <div><div>เช็คเลขที่.............................<br>ธนาคาร...............................<br>สาขา..................................</div><div class="ln">........................................<br>ผู้รับเงิน / COLLECTOR BY<br>วันที่........./........./.........</div></div>
+      <div><div>&nbsp;</div><div class="ln">........................................<br>ผู้ส่งของ / SENDER<br>วันที่........./........./.........</div></div>
+      <div><div class="c">${e(seller.name_th)}</div><div class="ln">........................................<br>ผู้มีอำนาจ / AUTHORIZED<br>วันที่........./........./.........</div></div>
+    </div>
+    <div class="foot">${e(seller.footer)}</div></div>`;
+}
+function billDocHtml(b, seller, copyLabel){
+  const pages=Math.max(1, Math.ceil(b.items.length/BILL_ROWS)); let out='';
+  for(let p=0;p<pages;p++) out+=billPageHtml(b, seller, copyLabel, p+1, pages, b.items.slice(p*BILL_ROWS,(p+1)*BILL_ROWS), p*BILL_ROWS+1, p===pages-1);
+  return out;
+}
+function printBills(bills){
+  const seller=Object.assign({name_th:'',name_en:'',address:'',phone:'',tax_id:'',footer:''}, (S.bill&&S.bill.seller)||{});
+  if(!document.getElementById('sarabunFont')){ const l=document.createElement('link'); l.id='sarabunFont'; l.rel='stylesheet';
+    l.href='https:\/\/fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap'; document.head.appendChild(l); }
+  const o={copy:pickOpt('billCopy','orig')};
+  const LBL={orig:['ต้นฉบับ'], copy:['สำเนา'], both:['ต้นฉบับ','สำเนา']};
+  const bodyOf=o=>bills.map(b=>LBL[o.copy].map(l=>billDocHtml(b, seller, l)).join('')).join('');
+  const htmlOf=o=>`<!doctype html><html lang="th"><head><meta charset="utf-8"><title>${h(bills.map(b=>b.inv_no).join(', '))}</title>
+    <link href="https:\/\/fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <style>body{margin:0;padding:6mm 0;background:#fff}${BILL_CSS}</style></head><body>${bodyOf(o)}</body></html>`;
+  const pcss=`#printArea{background:#fff}${BILL_CSS}`;
+  showDocView(htmlOf(o), 'ใบบิล • '+bills.length+' ใบ', {css:pcss, body:bodyOf(o),
+    options:[{key:'copy', type:'select', label:'ฉบับ', value:o.copy, choices:[['orig','ต้นฉบับ'],['copy','สำเนา'],['both','ต้นฉบับ + สำเนา']]}],
+    change:(k,v)=>{ o[k]=v; setPickOpt('billCopy', v); return {html:htmlOf(o), body:bodyOf(o)}; }});
+}
+
 /* ---------- Allocate หลาย P.O. (ขั้น 2 ตรวจสินค้าพร้อมส่ง) ----------
    ติ๊กเลือกการ์ด P.O. ในหัวข้อ "2. ตรวจสินค้าพร้อมส่ง" → ปุ่มลอย 📦 Allocate → ดึง Excel ไฟล์เดียว
    (เรียง P.O. ตามลำดับในหน้า บนลงล่าง / สินค้าตามลำดับในใบ P.O.) → แก้ "จำนวนพร้อมส่ง" → อัพกลับ → อัปเดตแยกตามเลข P.O. */
@@ -1818,6 +2348,7 @@ function updateAllocFab(){
   $('#allocN').textContent = n ? n+' ใบ' : '';
   if(!show) closeAllocMenu();
   updateBulkBar();
+  updateBillFab();
 }
 
 /* ---------- เปลี่ยนขั้นตอนหลาย P.O. พร้อมกัน (เฉพาะหัวข้อ 1–5) ----------
