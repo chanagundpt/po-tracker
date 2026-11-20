@@ -1898,9 +1898,23 @@ function billsOfPo(id){ return S.bill ? S.bill.bills.filter(b=>b.status!=='cance
 function billPill(po){
   return billsOfPo(po.id).map(b=>`<span class="tag bill-tag ${b.status}">🧾 ${h(b.inv_no)} • ${BILL_ST[b.status]}</span>`).join('');
 }
+/** บาร์โค้ดทั้งหมดของสินค้า: บาร์โค้ดที่ให้มา + บาร์โค้ดใน JST ของ SKU/บาร์โค้ดนั้น (สินค้าตัวเดียวกันแม้ชื่อ/SKU ในไฟล์ไม่ตรง 100%) */
+function billCodes(sku, bc){
+  const out=new Set(), add=b=>{ b=String(b||'').replace(/\s/g,'').replace(/\.0+$/,''); if(b) out.add(b); };
+  add(bc);
+  const P=S.prod, p=P && ((sku && P.bySku[String(sku).trim().toUpperCase()]) || (bc && P.byCode[String(bc).trim()]));
+  if(p) (p.barcodes||[]).forEach(add);
+  return out;
+}
+/** ราคาประจำร้าน: จับจากบาร์โค้ดก่อน (ตรงกัน = สินค้าตัวเดียวกัน) ไม่เจอค่อยจับ SKU — มีหลายแถวใช้ที่แก้ล่าสุด */
 function billPriceOf(cust, sku, bc){
-  const L=(S.bill && S.bill.prices)||[], s=String(sku||'').toUpperCase();
-  return (s && L.find(p=>p.customer===cust && String(p.sku).toUpperCase()===s)) || (bc && L.find(p=>p.customer===cust && p.barcode===String(bc))) || null;
+  const L=((S.bill && S.bill.prices)||[]).filter(p=>p.customer===cust); if(!L.length) return null;
+  const latest=a=>a.sort((x,y)=>String(y.updated_at).localeCompare(String(x.updated_at)))[0]||null;
+  const mine=billCodes(sku, bc);
+  const byBc=mine.size ? L.filter(p=>[...billCodes(p.sku, p.barcode)].some(c=>mine.has(c))) : [];
+  if(byBc.length) return latest(byBc);
+  const s=String(sku||'').trim().toUpperCase();
+  return s ? latest(L.filter(p=>String(p.sku).trim().toUpperCase()===s)) : null;
 }
 function billCustOf(cust){ return ((S.bill && S.bill.customers)||[]).find(c=>c.customer===cust) || null; }
 
@@ -2098,6 +2112,10 @@ function openBillEditor(id){
     </div>`, true);
   md.el.querySelector('.modal-box').classList.add('xwide','bill-box');
   let dirty=false;
+  // บิลที่ยังรอ Confirm: รายการที่ยังไม่มีราคา เติมจากราคาประจำร้านล่าสุดให้ (เช่น เพิ่งอัปโหลดราคาหลังสร้างบิล)
+  if(!lock){ let n=0;
+    E.items.forEach(it=>{ if(!(Number(it.price)>0)){ const pr=billPriceOf(E.customer, it.sku, it.barcode); if(pr){ it.price=pr.price; n++; } } });
+    if(n){ dirty=true; setTimeout(()=>toast('เติมราคาจากราคาประจำร้านให้ '+n+' รายการ — ตรวจแล้วกดบันทึก'), 50); } }
   const drawItems=()=>{
     const t=billCalc(E);
     $('#beItems',md.el).innerHTML=`<div class="be-row be-head"><span>#</span><span>รายการสินค้า</span><span>จำนวน</span><span>หน่วยละ</span><span>ส่วนลด</span><span>ราคารวม</span><span></span></div>`+
@@ -2179,18 +2197,18 @@ function billPricesHtml(){
   const rows=S.bill.prices.filter(p=>p.customer===f.pcust).sort((a,b)=>String(a.name).localeCompare(String(b.name)));
   return `<div class="filters"><select id="bpCust">${custs.map(c=>`<option ${c===f.pcust?'selected':''}>${h(c)}</option>`).join('')}</select>
       <input id="bpQ" type="search" placeholder="🔎 ค้นหาสินค้า" value="${h(f.pq||'')}"></div>
-    <div class="ref">ราคาที่คีย์ในบิลจะถูกจำเป็นราคาประจำของร้านอัตโนมัติ — แก้ที่นี่ได้ (ช่องว่าง = ลบราคา) ประวัติแสดง 10 ครั้งล่าสุด</div>
+    <div class="be-btns"><button class="btn sm" data-bpadd>＋ เพิ่มราคาสินค้า</button><button class="btn primary sm" data-bpsave>💾 บันทึกราคาที่แก้</button>
+      <label class="btn sm">📥 นำเข้าราคาจาก Excel<input type="file" id="bpFile" accept=".xlsx,.xls,.csv" hidden></label>
+      <button class="btn sm" data-bpxls>⬇ ดาวน์โหลดไฟล์ราคา (Excel)</button></div>
+    <div class="ref">ราคาที่คีย์ในบิลจะถูกจำเป็นราคาประจำของร้านอัตโนมัติ — แก้ที่นี่ได้ (ช่องว่าง = ลบราคา) ประวัติแสดง 10 ครั้งล่าสุด • ตอนออกบิลจับราคาจากบาร์โค้ดก่อน แล้วค่อย SKU<br>
+      ไฟล์ Excel: คอลัมน์ SKU และ/หรือ บาร์โค้ด + ราคา (บาท/หน่วย) — มีคอลัมน์ “ลูกค้า” ได้ (หลายร้านในไฟล์เดียว) ไม่มีจะใช้ร้านที่เลือกด้านบน; ช่องราคาว่างจะข้าม (ไม่ลบราคาเดิม)
+      • ปุ่มดาวน์โหลดได้ไฟล์ของร้านนี้ พร้อมสินค้าที่เคยสั่งใน P.O. แต่ยังไม่มีราคา ใช้กรอกแล้วอัปโหลดกลับได้เลย</div>
     <div class="bp-list">${rows.length?rows.map((p,i)=>`<div class="bp-row" data-i="${i}">
         <div><b>${h(p.name||'-')}</b><div class="ref">${h([p.sku,p.barcode].filter(Boolean).join(' • '))}</div>
           <div class="ref">${p.history.slice(1,4).map(x=>m2(x.price)+' ('+h(thDate(String(x.at).slice(0,10)))+(x.inv?' '+h(x.inv):'')+')').join(' ← ')}</div></div>
         <div class="bp-p"><input type="number" min="0" step="0.01" value="${h(p.price)}" data-sku="${h(p.sku)}" data-bc="${h(p.barcode)}" data-name="${h(p.name)}">
           <div class="ref">${h(thDateTime(p.updated_at))} • ${h(p.updated_by)}</div></div></div>`).join('')
-      : '<div class="empty">ยังไม่มีราคาของร้านนี้ — ราคาจะถูกจำเมื่อบันทึกบิลแรก หรือกด “＋ เพิ่มราคาสินค้า”</div>'}</div>
-    <div class="be-btns"><button class="btn sm" data-bpadd>＋ เพิ่มราคาสินค้า</button><button class="btn primary sm" data-bpsave>💾 บันทึกราคาที่แก้</button>
-      <label class="btn sm">📥 นำเข้าราคาจาก Excel<input type="file" id="bpFile" accept=".xlsx,.xls,.csv" hidden></label>
-      <button class="btn sm" data-bpxls>⬇ ดาวน์โหลดไฟล์ราคา (Excel)</button></div>
-    <div class="ref">ไฟล์ Excel: คอลัมน์ SKU และ/หรือ บาร์โค้ด + ราคา (บาท/หน่วย) — มีคอลัมน์ “ลูกค้า” ได้ (หลายร้านในไฟล์เดียว) ไม่มีจะใช้ร้านที่เลือกด้านบน;
-      ช่องราคาว่างจะข้าม (ไม่ลบราคาเดิม) • ปุ่มดาวน์โหลดได้ไฟล์ของร้านนี้ พร้อมสินค้าที่เคยสั่งใน P.O. แต่ยังไม่มีราคา ใช้กรอกแล้วอัปโหลดกลับได้เลย</div>`;
+      : '<div class="empty">ยังไม่มีราคาของร้านนี้ — ราคาจะถูกจำเมื่อบันทึกบิลแรก หรือกด “＋ เพิ่มราคาสินค้า” / “📥 นำเข้าราคาจาก Excel”</div>'}</div>`;
 }
 /** ไฟล์ราคาของร้าน: ราคาที่มีอยู่ + สินค้าจาก P.O. ของร้านนี้ที่ยังไม่มีราคา (ช่องราคาว่าง ไว้กรอก) */
 async function exportBillPrices(cust){
@@ -2349,6 +2367,7 @@ const BILL_CSS=`.iv{width:194mm;margin:0 auto 8mm;box-sizing:border-box;padding:
   .iv .items th{vertical-align:middle}
   .iv .items tbody td{border-top:0;border-bottom:0;padding:.5mm 1.6mm;height:5.2mm;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .iv .items tbody tr:last-child td{border-bottom:1px solid #000}
+  .iv .items tbody td.nm{white-space:normal;overflow:visible;font-size:8.8pt;line-height:1.15}
   .iv .tot td{padding:.9mm 1.6mm;vertical-align:middle}
   .iv .tot .lb{text-align:left}
   .iv .sign{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border:1px solid #000;border-top:0;font-size:7.8pt;min-height:30mm}
@@ -2357,11 +2376,11 @@ const BILL_CSS=`.iv{width:194mm;margin:0 auto 8mm;box-sizing:border-box;padding:
   .iv .sign .ln{text-align:center;line-height:1.5}
   .iv .foot{text-align:center;font-size:8pt;margin-top:1.5mm;line-height:1.35;white-space:pre-line}
   @media print{@page{size:A4 portrait;margin:7mm 8mm}.iv{margin:0}}`;
-function billPageHtml(b, seller, copyLabel, pg, pages, rows, startNo, last){
+function billPageHtml(b, seller, copyLabel, pg, pages, rows, startNo, last, fill){
   const t=billCalc(b), c=b.cust||{}, logo=($('#logoImg')||{}).src||'', e=h;
   const lines=rows.map((it,i)=>{ const amt=t.lines[b.items.indexOf(it)];
-    return `<tr><td class="c">${startNo+i}</td><td>${e(it.name)}</td><td class="c">${num(it.qty)}</td><td class="r">${m2(it.price)}</td>
-      <td class="r">${m2(it.disc)}</td><td class="r">${m2(amt)}</td><td class="r">${m2(amt)}</td></tr>`; }).join('');
+    return `<tr><td class="c">${startNo+i}</td><td class="c">${e(it.barcode)}</td><td class="nm">${e(it.name)}</td><td class="c">${num(it.qty)}</td><td class="r">${m2(it.price)}</td>
+      <td class="r">${m2(it.disc)}</td><td class="r">${m2(amt)}</td></tr>`; }).join('');
   const val=v=>last?m2(v):'';
   return `<div class="iv">
     <div class="iv-top"><div class="iv-logo">${logo?`<img src="${logo}" alt="2NK">`:'<b>2NK</b>'}<small>AGENCY</small></div>
@@ -2378,10 +2397,10 @@ function billPageHtml(b, seller, copyLabel, pg, pages, rows, startNo, last){
       <tr><td class="lb">รหัสลูกค้า<i>CUSTOMER ID</i></td><td class="lb">ใบสั่งซื้อเลขที่<i>PURCHASE ORDER NO</i></td><td class="lb">เงื่อนไขการชำระเงิน<i>TERM OF PAYMENT</i></td>
         <td class="lb">วันครบกำหนดชำระเงิน<i>DUE DATE PAYMENT</i></td><td class="lb">พนักงานขาย<i>SALEMAN</i></td></tr>
       <tr><td class="c">${e(c.code)}</td><td class="c">${e(b.po_nos)}</td><td class="c">${e(c.term)}</td><td class="c">${e(enDate(b.due_date))}</td><td class="c">${e(c.salesman)}</td></tr></table>
-    <div class="items"><table><colgroup><col style="width:6.5%"><col style="width:42.5%"><col style="width:8%"><col style="width:10.5%"><col style="width:9%"><col style="width:11.75%"><col style="width:11.75%"></colgroup>
-      <thead><tr><th class="lb">ลำดับ<i>NO</i></th><th class="lb">รายการสินค้า<i>DESCRIPTION</i></th><th class="lb">จำนวน<i>Qty.</i></th><th class="lb">หน่วยละ<i>UNIT PRICE</i></th>
-        <th class="lb">ส่วนลด<i>DISCOUNT</i></th><th class="lb">ราคาขาย<i>AMOUNT</i></th><th class="lb">ราคารวม<i>TOTAL</i></th></tr></thead>
-      <tbody>${lines}${Array.from({length:BILL_ROWS-rows.length},(_,i)=>`<tr><td></td><td class="c" style="color:#555">${!last&&i===0?'(มีต่อหน้าถัดไป)':''}</td><td></td><td></td><td></td><td></td><td></td></tr>`).join('')}</tbody></table></div>
+    <div class="items"><table><colgroup><col style="width:6%"><col style="width:15%"><col style="width:39%"><col style="width:8%"><col style="width:10.5%"><col style="width:9%"><col style="width:12.5%"></colgroup>
+      <thead><tr><th class="lb">ลำดับ<i>NO</i></th><th class="lb">บาร์โค้ด<i>BARCODE</i></th><th class="lb">รายการสินค้า<i>DESCRIPTION</i></th><th class="lb">จำนวน<i>Qty.</i></th><th class="lb">หน่วยละ<i>UNIT PRICE</i></th>
+        <th class="lb">ส่วนลด<i>DISCOUNT</i></th><th class="lb">ราคารวม<i>TOTAL</i></th></tr></thead>
+      <tbody>${lines}${Array.from({length:fill},(_,i)=>`<tr><td></td><td></td><td class="c" style="color:#555">${!last&&i===0?'(มีต่อหน้าถัดไป)':''}</td><td></td><td></td><td></td><td></td></tr>`).join('')}</tbody></table></div>
     <table class="tot"><colgroup><col style="width:9%"><col style="width:49%"><col style="width:24%"><col style="width:18%"></colgroup>
       <tr><td colspan="2" rowspan="4" style="white-space:pre-line;vertical-align:top">${last?e(b.remark):''}</td><td class="lb">รวมราคาสินค้า<i>SUB TOTAL</i></td><td class="r">${val(t.sub)}</td></tr>
       <tr><td class="lb">ส่วนลด ${last?e(Number(b.discount_pct)||0):''} %<i>DISCOUNT</i></td><td class="r">${val(t.disc)}</td></tr>
@@ -2396,9 +2415,16 @@ function billPageHtml(b, seller, copyLabel, pg, pages, rows, startNo, last){
     </div>
     <div class="foot">${e(seller.footer)}</div></div>`;
 }
+/** แบ่งหน้าตามความสูง: พื้นที่รายการ = 20 บรรทัด; ชื่อยาวที่ขึ้น 2–3 บรรทัดกินพื้นที่มากขึ้น (กันล้นกระดาษ A4) */
+const BILL_ROW_MM=5.2, BILL_AREA_MM=BILL_ROWS*BILL_ROW_MM;
+const billRowMm=it=>{ const n=Math.min(3, Math.max(1, Math.ceil(String(it.name||'').length/44))); return n===1 ? BILL_ROW_MM : n*3.7+0.8; };
 function billDocHtml(b, seller, copyLabel){
-  const pages=Math.max(1, Math.ceil(b.items.length/BILL_ROWS)); let out='';
-  for(let p=0;p<pages;p++) out+=billPageHtml(b, seller, copyLabel, p+1, pages, b.items.slice(p*BILL_ROWS,(p+1)*BILL_ROWS), p*BILL_ROWS+1, p===pages-1);
+  const pages=[]; let cur=[], used=0;
+  b.items.forEach(it=>{ const mm=billRowMm(it); if(cur.length && used+mm>BILL_AREA_MM-BILL_ROW_MM){ pages.push({rows:cur, used}); cur=[]; used=0; } cur.push(it); used+=mm; });
+  pages.push({rows:cur, used});
+  let out='', no=1;
+  pages.forEach((p,i)=>{ const fill=Math.max(0, Math.floor((BILL_AREA_MM-p.used)/BILL_ROW_MM));
+    out+=billPageHtml(b, seller, copyLabel, i+1, pages.length, p.rows, no, i===pages.length-1, fill); no+=p.rows.length; });
   return out;
 }
 function printBills(bills){
@@ -2414,7 +2440,33 @@ function printBills(bills){
   const pcss=`#printArea{background:#fff}${BILL_CSS}`;
   showDocView(htmlOf(o), 'ใบบิล • '+bills.length+' ใบ', {css:pcss, body:bodyOf(o),
     options:[{key:'copy', type:'select', label:'ฉบับ', value:o.copy, choices:[['orig','ต้นฉบับ'],['copy','สำเนา'],['both','ต้นฉบับ + สำเนา']]}],
+    buttons:[{label:'⬇ Excel', title:'ส่งออกข้อมูลในบิลเป็น Excel', onClick:()=>exportBillsExcel(bills)}],
     change:(k,v)=>{ o[k]=v; setPickOpt('billCopy', v); return {html:htmlOf(o), body:bodyOf(o)}; }});
+}
+/** ส่งออกบิลเป็น Excel: แผ่น "รายการในบิล" (1 แถวต่อสินค้า) + "สรุปบิล" (1 แถวต่อบิล) */
+async function saveXlsx(wb, name){
+  const win = MODE==='gas' ? window.open('', '_blank') : null;
+  try{
+    if(MODE!=='gas'){ XLSX.writeFile(wb,name); return; }
+    const r=await call('saveExport',{name, b64:XLSX.write(wb,{bookType:'xlsx',type:'base64'}), mime:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    if(win){ win.location.href=r.url; toast('กำลังดาวน์โหลด Excel'); }
+  }catch(e){ if(win) win.close(); fail(e); }
+}
+async function exportBillsExcel(bills){
+  try{ await loadScript(XLSX_SRC); }catch(e){ fail(e); return; }
+  const a=[['เลขที่บิล','วันที่','สถานะ','ลูกค้า','ชื่อในบิล','เลข P.O.','ลำดับ','บาร์โค้ด','SKU','รายการสินค้า','จำนวน','หน่วยละ','ส่วนลด','ราคารวม']];
+  const s=[['เลขที่บิล','วันที่','สถานะ','ลูกค้า','ชื่อในบิล','เลขประจำตัวผู้เสียภาษี','รหัสลูกค้า','เลข P.O.','เงื่อนไขการชำระ','วันครบกำหนด','จำนวนรายการ',
+    'รวมราคาสินค้า','ส่วนลด %','ส่วนลด','ราคาสุทธิก่อนภาษี','VAT','รวมเงินทั้งสิ้น','จำนวนเงิน (ตัวอักษร)','หมายเหตุ']];
+  bills.forEach(b=>{ const t=billCalc(b), c=b.cust||{};
+    b.items.forEach((it,i)=>a.push([b.inv_no,b.doc_date,BILL_ST[b.status]||'',b.customer,c.name||'',b.po_nos,i+1,String(it.barcode||''),it.sku||'',it.name,
+      Number(it.qty)||0,Number(it.price)||0,Number(it.disc)||0,t.lines[i]]));
+    s.push([b.inv_no,b.doc_date,BILL_ST[b.status]||'',b.customer,c.name||'',String(c.tax_id||''),c.code||'',b.po_nos,c.term||'',b.due_date||'',b.items.length,
+      t.sub,Number(b.discount_pct)||0,t.disc,t.before,t.vat,t.total,bahtText(t.total),b.remark||'']); });
+  const w1=XLSX.utils.aoa_to_sheet(a), w2=XLSX.utils.aoa_to_sheet(s);
+  w1['!cols']=[{wch:14},{wch:11},{wch:12},{wch:14},{wch:30},{wch:16},{wch:6},{wch:16},{wch:16},{wch:48},{wch:9},{wch:11},{wch:9},{wch:13}];
+  w2['!cols']=[{wch:14},{wch:11},{wch:12},{wch:14},{wch:34},{wch:16},{wch:12},{wch:16},{wch:16},{wch:12},{wch:9},{wch:14},{wch:8},{wch:11},{wch:14},{wch:12},{wch:14},{wch:44},{wch:24}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,w1,'รายการในบิล'); XLSX.utils.book_append_sheet(wb,w2,'สรุปบิล');
+  await saveXlsx(wb, (bills.length===1?bills[0].inv_no:'บิล_'+bills.length+'ใบ')+'_'+S.today+'.xlsx');
 }
 
 /* ---------- Allocate หลาย P.O. (ขั้น 2 ตรวจสินค้าพร้อมส่ง) ----------
@@ -2932,6 +2984,7 @@ function showDocView(html, title, printDoc){
       ${opts.map(o=>o.type==='select'
         ? `<label class="doc-tg doc-sel" title="${h(o.label)}"><span class="hide-sm">${h(o.label)}</span><select data-opt="${h(o.key)}">${o.choices.map(c=>`<option value="${h(c[0])}" ${c[0]===o.value?'selected':''}>${h(c[1])}</option>`).join('')}</select></label>`
         : `<label class="doc-tg ${o.why?'off':''}" title="${h(o.why||o.hint||o.label)}"><input type="checkbox" data-opt="${h(o.key)}" ${o.on?'checked':''}><span>${h(o.label)}</span></label>`).join('')}
+      ${((printDoc && printDoc.buttons)||[]).map((b,i)=>`<button data-xbtn="${i}" title="${h(b.title||b.label)}">${h(b.label)}</button>`).join('')}
       <button data-print title="พิมพ์ / บันทึกเป็น PDF">🖨 <span class="hide-sm">พิมพ์ / PDF</span></button>
       <button data-win title="เปิดในหน้าต่างใหม่">↗</button><button data-x title="ปิด">✕</button></div>
     <div class="doc-scroll"><div class="doc-page"><iframe title="${h(title)}"></iframe></div></div>
@@ -2959,6 +3012,7 @@ function showDocView(html, title, printDoc){
     if($('#printArea')){ try{ window.print(); return; }catch(e){} }
     try{ fr.contentWindow.focus(); fr.contentWindow.print(); }catch(e){ fail(new Error('พิมพ์จากหน้านี้ไม่ได้ — กด ↗ เพื่อเปิดในหน้าต่างใหม่แล้วพิมพ์')); }
   };
+  $$('[data-xbtn]',wrap).forEach(b=>b.onclick=()=>printDoc.buttons[b.dataset.xbtn].onClick());
   $$('[data-opt]',wrap).forEach(el=>el.onchange=()=>{
     const op=opts.find(x=>x.key===el.dataset.opt);
     if(op && op.why && el.checked){ el.checked=false; toast(op.why, true); return; }
