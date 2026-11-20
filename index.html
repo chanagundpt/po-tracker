@@ -2186,7 +2186,91 @@ function billPricesHtml(){
         <div class="bp-p"><input type="number" min="0" step="0.01" value="${h(p.price)}" data-sku="${h(p.sku)}" data-bc="${h(p.barcode)}" data-name="${h(p.name)}">
           <div class="ref">${h(thDateTime(p.updated_at))} • ${h(p.updated_by)}</div></div></div>`).join('')
       : '<div class="empty">ยังไม่มีราคาของร้านนี้ — ราคาจะถูกจำเมื่อบันทึกบิลแรก หรือกด “＋ เพิ่มราคาสินค้า”</div>'}</div>
-    <div class="be-btns"><button class="btn sm" data-bpadd>＋ เพิ่มราคาสินค้า</button><button class="btn primary sm" data-bpsave>💾 บันทึกราคาที่แก้</button></div>`;
+    <div class="be-btns"><button class="btn sm" data-bpadd>＋ เพิ่มราคาสินค้า</button><button class="btn primary sm" data-bpsave>💾 บันทึกราคาที่แก้</button>
+      <label class="btn sm">📥 นำเข้าราคาจาก Excel<input type="file" id="bpFile" accept=".xlsx,.xls,.csv" hidden></label>
+      <button class="btn sm" data-bpxls>⬇ ดาวน์โหลดไฟล์ราคา (Excel)</button></div>
+    <div class="ref">ไฟล์ Excel: คอลัมน์ SKU และ/หรือ บาร์โค้ด + ราคา (บาท/หน่วย) — มีคอลัมน์ “ลูกค้า” ได้ (หลายร้านในไฟล์เดียว) ไม่มีจะใช้ร้านที่เลือกด้านบน;
+      ช่องราคาว่างจะข้าม (ไม่ลบราคาเดิม) • ปุ่มดาวน์โหลดได้ไฟล์ของร้านนี้ พร้อมสินค้าที่เคยสั่งใน P.O. แต่ยังไม่มีราคา ใช้กรอกแล้วอัปโหลดกลับได้เลย</div>`;
+}
+/** ไฟล์ราคาของร้าน: ราคาที่มีอยู่ + สินค้าจาก P.O. ของร้านนี้ที่ยังไม่มีราคา (ช่องราคาว่าง ไว้กรอก) */
+async function exportBillPrices(cust){
+  const rows=S.bill.prices.filter(p=>p.customer===cust).map(p=>[cust,p.sku,p.barcode,p.name,p.price,thDateTime(p.updated_at)]);
+  const seen=new Set(rows.map(r=>String(r[1]||r[2]).toUpperCase()));
+  S.pos.filter(p=>p.customer===cust && p.status!=='DELETED').forEach(po=>pickRows(po).forEach(r=>{
+    const k=String(r.sku||r.barcode).toUpperCase(); if(!k || seen.has(k)) return; seen.add(k); rows.push([cust,r.sku,r.barcode,r.name,'','']); }));
+  const win = MODE==='gas' ? window.open('', '_blank') : null;
+  try{
+    await loadScript(XLSX_SRC);
+    const ws=XLSX.utils.aoa_to_sheet([['ลูกค้า','SKU','บาร์โค้ด','ชื่อสินค้า','ราคา (บาท/หน่วย)','แก้ไขล่าสุด']].concat(rows));
+    ws['!cols']=[{wch:18},{wch:16},{wch:16},{wch:50},{wch:16},{wch:18}];
+    rows.forEach((r,i)=>{ const c=ws[XLSX.utils.encode_cell({r:i+1,c:2})]; if(c){ c.t='s'; c.v=String(r[2]||''); } });   // บาร์โค้ดเป็นข้อความ (ไม่กลายเป็น 4.58E+12)
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'ราคา');
+    const name='ราคา_'+String(cust).replace(/[\\/:*?"<>|]/g,'')+'_'+S.today+'.xlsx';
+    if(MODE!=='gas'){ XLSX.writeFile(wb,name); return; }
+    const r=await call('saveExport',{name, b64:XLSX.write(wb,{bookType:'xlsx',type:'base64'}), mime:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    if(win) win.location.href=r.url;
+  }catch(e){ if(win) win.close(); fail(e); }
+}
+/** นำเข้าราคาจาก Excel: เลือกคอลัมน์ → ตัวอย่าง → บันทึกแยกตามร้าน (ช่องราคาว่างข้าม ไม่ลบราคาเดิม) */
+async function importBillPrices(file){
+  let rows;
+  try{
+    await loadScript(XLSX_SRC);
+    const wb=XLSX.read(await file.arrayBuffer(), {type:'array'});
+    rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false, defval:''}).filter(r=>r.some(c=>String(c).trim()));
+  }catch(e){ fail(e); return; }
+  if(rows.length<2){ toast('ไฟล์ไม่มีข้อมูล', true); return; }
+  const KW=/sku|barcode|บาร์โค้ด|ราคา|price|ชื่อ|name|ลูกค้า|customer|ร้าน/i;
+  let hi=0, hs=-1;
+  rows.slice(0,10).forEach((r,i)=>{ const sc=r.filter(c=>String(c).trim() && KW.test(String(c)) && String(c).length<40).length; if(sc>hs){ hs=sc; hi=i; } });
+  rows=rows.slice(hi);
+  const head=rows[0].map(x=>String(x).trim()), guess=re=>head.findIndex(x=>re.test(x));
+  const cCust=guess(/ลูกค้า|customer|ร้าน/i), cSku=guess(/sku/i), cBc=guess(/barcode|บาร์โค้ด|ean/i),
+    cName=guess(/ชื่อ|name|description|รายการ/i), cPrice=guess(/ราคา|price/i);
+  const sel=(id,cur,none)=>`<select id="${id}">${none?'<option value="-1">— ไม่มี —</option>':''}${head.map((x,i)=>`<option value="${i}" ${i===cur?'selected':''}>${h(x||'คอลัมน์ '+(i+1))}</option>`).join('')}</select>`;
+  const custs=billPriceCustomers();
+  const md=openModal(`<div class="modal-head">📥 นำเข้าราคาจาก Excel</div><div class="modal-body">
+    <div class="ref">${h(file.name)} • ${num(rows.length-1)} แถว — เลือกว่าคอลัมน์ไหนคืออะไร</div>
+    <div class="map-grid">
+      <div class="f"><label>ลูกค้า (ถ้ามีในไฟล์)</label>${sel('ipCust',cCust,true)}</div>
+      <div class="f"><label>SKU</label>${sel('ipSku',cSku,true)}</div>
+      <div class="f"><label>บาร์โค้ด</label>${sel('ipBc',cBc,true)}</div>
+      <div class="f"><label>ชื่อสินค้า</label>${sel('ipName',cName,true)}</div>
+      <div class="f"><label>ราคา (บาท/หน่วย) *</label>${sel('ipPrice',cPrice)}</div>
+      <div class="f"><label>ร้าน (ใช้เมื่อไฟล์ไม่มีคอลัมน์ลูกค้า)</label><select id="ipDef">${custs.map(c=>`<option ${c===S.bf.pcust?'selected':''}>${h(c)}</option>`).join('')}</select></div>
+    </div>
+    <div id="ipSum" class="alert info"></div>
+    <div style="overflow:auto"><table class="prev-table"><tr>${head.map(x=>`<th>${h(x)}</th>`).join('')}</tr>
+      ${rows.slice(1,6).map(r=>`<tr>${head.map((_,i)=>`<td>${h(r[i])}</td>`).join('')}</tr>`).join('')}</table></div>
+  </div><div class="modal-foot"><button class="btn" data-x>ยกเลิก</button><button class="btn primary" data-ok>นำเข้า</button></div>`, true);
+  const cell=(r,i)=>i>=0?String(r[i]==null?'':r[i]).trim():'';
+  const parse=()=>{
+    const v=id=>Number($('#'+id,md.el).value), ci=v('ipCust'), si=v('ipSku'), bi=v('ipBc'), ni=v('ipName'), pi=v('ipPrice'), def=$('#ipDef',md.el).value;
+    const by={}; let skip=0;
+    rows.slice(1).forEach(r=>{
+      const price=Number(cell(r,pi).replace(/[,฿\s]/g,'')), sku=cell(r,si), bc=cell(r,bi).replace(/\.0+$/,'');
+      if(!(price>0) || (!sku && !bc)){ skip++; return; }
+      const cust=(ci>=0 && cell(r,ci)) || def; if(!cust){ skip++; return; }
+      (by[cust]=by[cust]||[]).push({sku, barcode:bc, name:cell(r,ni), price});
+    });
+    return {by, skip};
+  };
+  const sum=()=>{ const {by,skip}=parse(), ks=Object.keys(by);
+    $('#ipSum',md.el).innerHTML = ks.length ? 'จะบันทึกราคา '+ks.map(k=>`<b>${h(k)}</b> ${by[k].length} รายการ`).join(' • ')
+      +(skip?' — ข้าม '+skip+' แถว (ไม่มีราคา หรือไม่มี SKU/บาร์โค้ด)':'')
+      +(ks.some(k=>custs.indexOf(k)<0)?'<br>⚠ มีชื่อลูกค้าที่ไม่ตรงกับลูกค้าใน P.O.: '+ks.filter(k=>custs.indexOf(k)<0).map(h).join(', ')+' — ราคาจะใช้กับบิลได้เมื่อชื่อตรงกันเท่านั้น':'')
+      : 'ยังไม่มีแถวที่ใช้ได้ — ตรวจคอลัมน์ราคา และ SKU/บาร์โค้ด'; };
+  $$('select',md.el).forEach(s=>s.onchange=sum); sum();
+  $('[data-x]',md.el).onclick=()=>md.close();
+  $('[data-ok]',md.el).onclick=async()=>{
+    const {by}=parse(), ks=Object.keys(by); if(!ks.length){ toast('ไม่มีแถวที่ใช้ได้', true); return; }
+    const btn=$('[data-ok]',md.el); btn.disabled=true; let n=0;
+    try{
+      for(const k of ks){ btn.textContent='กำลังบันทึก '+k+'…';
+        for(let i=0;i<by[k].length;i+=300){ S.bill=await call('billPriceSave',{customer:k, rows:by[k].slice(i,i+300)}); n+=Math.min(300,by[k].length-i); } }
+      md.close(); if(ks.length===1) S.bf.pcust=ks[0]; renderBills(); toast('นำเข้าราคาแล้ว '+n+' รายการ');
+    }catch(e){ fail(e); btn.disabled=false; btn.textContent='นำเข้า'; }
+  };
 }
 function bindBillPrices(){
   const f=S.bf, sel=$('#bpCust'); if(sel) sel.onchange=()=>{ f.pcust=sel.value; renderBills(); };
@@ -2206,6 +2290,8 @@ function bindBillPrices(){
     if(!rows.length){ toast('ยังไม่ได้แก้ราคา'); return; }
     try{ S.bill=await call('billPriceSave',{customer:f.pcust, rows}); renderBills(); toast('บันทึกราคาแล้ว '+rows.length+' รายการ'); }catch(e){ fail(e); }
   };
+  $('#bpFile').onchange=e=>{ const file=e.target.files[0]; e.target.value=''; if(file) importBillPrices(file); };
+  $('[data-bpxls]').onclick=()=>exportBillPrices(f.pcust);
 }
 
 /* ---------- ข้อมูลลูกค้าในบิล + ผู้ขาย ---------- */
