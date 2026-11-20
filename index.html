@@ -2054,6 +2054,7 @@ function updateBillBar(sel){
   const tab=S.bf.tab;
   bar.innerHTML=`<b>เลือก ${sel.length} บิล</b>
     <button class="btn" data-bb="print">🖨 พิมพ์</button>
+    <button class="btn" data-bb="excel">⬇ Excel</button>
     ${tab==='pending'?'<button class="btn primary" data-bb="confirm">✓ Confirm</button>':''}
     ${tab==='confirmed'?'<button class="btn" data-bb="unconfirm">↩ ยกเลิก Confirm</button>':''}
     <button class="btn" data-bb="x" title="ยกเลิกที่เลือก">✕</button>`;
@@ -2061,6 +2062,7 @@ function updateBillBar(sel){
     const k=b.dataset.bb;
     if(k==='x'){ S.bf.sel={}; renderBills(); return; }
     if(k==='print'){ printBills(sel); return; }
+    if(k==='excel'){ exportBillsExcel(sel); return; }
     if(k==='confirm'){
       const miss=sel.filter(x=>x.items.some(it=>!(Number(it.price)>0)));
       if(!await confirmBox('Confirm '+sel.length+' บิล', sel.map(x=>'• '+x.inv_no+' '+(x.cust.name||x.customer)+' '+m2(billCalc(x).total)+' บาท').join('\n')
@@ -2443,7 +2445,7 @@ function printBills(bills){
     buttons:[{label:'⬇ Excel', title:'ส่งออกข้อมูลในบิลเป็น Excel', onClick:()=>exportBillsExcel(bills)}],
     change:(k,v)=>{ o[k]=v; setPickOpt('billCopy', v); return {html:htmlOf(o), body:bodyOf(o)}; }});
 }
-/** ส่งออกบิลเป็น Excel: แผ่น "รายการในบิล" (1 แถวต่อสินค้า) + "สรุปบิล" (1 แถวต่อบิล) */
+/** ส่งออกบิลเป็น Excel: 1 แผ่นต่อบิล (ชื่อแผ่น = เลข P.O.) มีสรุปท้ายบิล + "สรุปบิล" เมื่อหลายใบ */
 async function saveXlsx(wb, name){
   const win = MODE==='gas' ? window.open('', '_blank') : null;
   try{
@@ -2454,18 +2456,38 @@ async function saveXlsx(wb, name){
 }
 async function exportBillsExcel(bills){
   try{ await loadScript(XLSX_SRC); }catch(e){ fail(e); return; }
-  const a=[['เลขที่บิล','วันที่','สถานะ','ลูกค้า','ชื่อในบิล','เลข P.O.','ลำดับ','บาร์โค้ด','SKU','รายการสินค้า','จำนวน','หน่วยละ','ส่วนลด','ราคารวม']];
   const s=[['เลขที่บิล','วันที่','สถานะ','ลูกค้า','ชื่อในบิล','เลขประจำตัวผู้เสียภาษี','รหัสลูกค้า','เลข P.O.','เงื่อนไขการชำระ','วันครบกำหนด','จำนวนรายการ',
     'รวมราคาสินค้า','ส่วนลด %','ส่วนลด','ราคาสุทธิก่อนภาษี','VAT','รวมเงินทั้งสิ้น','จำนวนเงิน (ตัวอักษร)','หมายเหตุ']];
   bills.forEach(b=>{ const t=billCalc(b), c=b.cust||{};
-    b.items.forEach((it,i)=>a.push([b.inv_no,b.doc_date,BILL_ST[b.status]||'',b.customer,c.name||'',b.po_nos,i+1,String(it.barcode||''),it.sku||'',it.name,
-      Number(it.qty)||0,Number(it.price)||0,Number(it.disc)||0,t.lines[i]]));
     s.push([b.inv_no,b.doc_date,BILL_ST[b.status]||'',b.customer,c.name||'',String(c.tax_id||''),c.code||'',b.po_nos,c.term||'',b.due_date||'',b.items.length,
       t.sub,Number(b.discount_pct)||0,t.disc,t.before,t.vat,t.total,bahtText(t.total),b.remark||'']); });
-  const w1=XLSX.utils.aoa_to_sheet(a), w2=XLSX.utils.aoa_to_sheet(s);
-  w1['!cols']=[{wch:14},{wch:11},{wch:12},{wch:14},{wch:30},{wch:16},{wch:6},{wch:16},{wch:16},{wch:48},{wch:9},{wch:11},{wch:9},{wch:13}];
-  w2['!cols']=[{wch:14},{wch:11},{wch:12},{wch:14},{wch:34},{wch:16},{wch:12},{wch:16},{wch:16},{wch:12},{wch:9},{wch:14},{wch:8},{wch:11},{wch:14},{wch:12},{wch:14},{wch:44},{wch:24}];
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,w1,'รายการในบิล'); XLSX.utils.book_append_sheet(wb,w2,'สรุปบิล');
+  const wb=XLSX.utils.book_new(), used={};
+  const sheetName=b=>{ let n=String(b.po_nos||b.inv_no||'บิล').replace(/[\[\]:*?\/\\]/g,' ').replace(/\s+/g,' ').trim().slice(0,28)||'บิล', k=n, i=2;
+    while(used[k.toLowerCase()]) k=n.slice(0,26)+'_'+(i++); used[k.toLowerCase()]=1; return k; };
+  // 1 แผ่นต่อบิล: หัวบิล → รายการ → สรุปท้ายบิลเหมือนใบพิมพ์
+  bills.forEach(b=>{ const t=billCalc(b), c=b.cust||{}, pct=Number(b.discount_pct)||0;
+    const r=[['เลขที่บิล',b.inv_no,'','','วันที่',b.doc_date],
+      ['ลูกค้า',c.name||b.customer||'','','','สถานะ',BILL_ST[b.status]||''],
+      ['เลข P.O.',b.po_nos||'','','','วันครบกำหนด',b.due_date||''],
+      ['เลขประจำตัวผู้เสียภาษี',String(c.tax_id||''),'','','รหัสลูกค้า',c.code||''],
+      [],
+      ['ลำดับ','บาร์โค้ด','SKU','รายการสินค้า','จำนวน','หน่วยละ','ส่วนลด','ราคารวม']];
+    b.items.forEach((it,i)=>r.push([i+1,String(it.barcode||''),it.sku||'',it.name,Number(it.qty)||0,Number(it.price)||0,Number(it.disc)||0,t.lines[i]]));
+    r.push([]);
+    const tot=(l,v)=>r.push(['','','','','','',l,v]);
+    tot('รวมราคาสินค้า',t.sub);
+    tot('ส่วนลด '+pct+' %',t.disc);
+    tot('ราคาสุทธิก่อนภาษี',t.before);
+    tot('ภาษีมูลค่าเพิ่ม 7%',t.vat);
+    tot('รวมจำนวนเงินทั้งสิ้น',t.total);
+    r.push(['จำนวนเงิน (ตัวอักษร)','','',bahtText(t.total)]);
+    if(b.remark) r.push(['หมายเหตุ','','',b.remark]);
+    const w=XLSX.utils.aoa_to_sheet(r);
+    w['!cols']=[{wch:20},{wch:16},{wch:16},{wch:50},{wch:12},{wch:11},{wch:20},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,w,sheetName(b)); });
+  if(bills.length>1){ const w2=XLSX.utils.aoa_to_sheet(s);
+    w2['!cols']=[{wch:14},{wch:11},{wch:12},{wch:14},{wch:34},{wch:16},{wch:12},{wch:16},{wch:16},{wch:12},{wch:9},{wch:14},{wch:8},{wch:11},{wch:14},{wch:12},{wch:14},{wch:44},{wch:24}];
+    XLSX.utils.book_append_sheet(wb,w2,'สรุปบิล'); }
   await saveXlsx(wb, (bills.length===1?bills[0].inv_no:'บิล_'+bills.length+'ใบ')+'_'+S.today+'.xlsx');
 }
 
