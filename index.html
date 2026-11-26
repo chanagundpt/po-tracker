@@ -782,7 +782,9 @@ const SCREEN_DONE=new Set(); let SCREEN_BUSY=false;
 // เพราะใบ P.O. บางเจ้ามีคำว่า invoice/รับสินค้า ในเงื่อนไขท้ายใบ (ตรวจหัวกระดาษตัวอย่าง 11 ใบแล้ว ไม่มีใบไหนเข้าข่าย)
 const NOT_PO_HEAD=/ประกาศ|announcement|notice|cut\s*-?\s*off|ปิดรับ|หนังสือแจ้ง|แจ้งเพื่อทราบ|วันหยุด|holiday|วางบิล|กำหนดการ|ใบรับสินค้า|ใบรับของ|goods\s*receiv|receiving\s*(report|note)|ใบลดหนี้|credit\s*note|debit\s*note|ใบเพิ่มหนี้|ใบแจ้งหนี้|ใบวางบิล|ใบกำกับภาษี|tax\s*invoice|ใบเสร็จ|ใบคืนสินค้า|ใบส่งคืน|return\s*(note|order|request)|ใบเสนอราคา|quotation/i;
 const NOT_PO_ANY=/received\s*(number|no\.?)\s*:|ใบรับสินค้าตามเอกสาร/i;
-const SCREEN_VER='4';   // เปลี่ยนเลขเมื่อเกณฑ์เปลี่ยน → ใบที่เคยผ่าน (po) จะถูกตรวจใหม่
+// ใบสั่งซื้อค่าบริการ/ค่าใช้จ่าย (หัวเป็น Purchase Order แต่ไม่ใช่สั่งสินค้า) เช่น Boots "Payment Consign Oct2026 for SMC-N052"
+const SERVICE_PO=/payment\s*consign|consign(?:ment)?\s*(?:payment|sales?\s*payment)|rebate|service\s*fee|listing\s*fee|marketing\s*(?:fee|support|fund)|promotion(?:al)?\s*(?:support|fee)|display\s*fee|rental\s*fee|space\s*rent|ค่าเช่า|ค่าบริการ|ค่าโฆษณา|ค่าส่งเสริมการขาย|ค่าวางสินค้า|ค่าธรรมเนียม/i;
+const SCREEN_VER='5';   // เปลี่ยนเลขเมื่อเกณฑ์เปลี่ยน → ใบที่เคยผ่าน (po) จะถูกตรวจใหม่
 function screenText(raw, head, meta){
   const t=normThai(String(raw||'')), hd=normThai(String(head||'')), mt=normThai(String(meta||''));
   const neg=hd.match(NOT_PO_HEAD) || t.match(NOT_PO_ANY);
@@ -797,6 +799,8 @@ function screenText(raw, head, meta){
   const ean=(t.match(/(?:^|[^\d])(\d{13})(?=[^\d]|$)/g)||[]).map(x=>x.replace(/\D/g,'')).filter(validEan13).length;
   // หลักฐานชัด = หัวกระดาษเขียนว่าใบสั่งซื้อ หรือมีบาร์โค้ดสินค้า; คำว่า "ใบสั่งซื้อ" ในเนื้อหาอย่างเดียวไม่พอ
   // (เช่น เอกสารกำหนดการวางบิลของ OR เขียนว่า "สำเนาใบสั่งซื้อ (PO)" ในรายการเอกสาร) → ถามผู้ใช้
+  const svc=!ean && t.match(SERVICE_PO);
+  if(svc) return {result:'svc', why:'ใบนี้เป็นใบสั่งซื้อค่าบริการ/ค่าใช้จ่าย (“'+svc[0]+'”) ไม่มีรายการสินค้า'};
   if(PO_TITLE.test(hd) || /\border\b/i.test(hd) && ean) return {result:'po', why:'หัวเอกสารเป็นใบสั่งซื้อ'};
   if(ean) return {result:'po', why:'พบบาร์โค้ดสินค้า '+ean+' รายการ'};
   if(kw) return {result:'not_po', soft:true, why:'พบคำว่า “'+kw[0]+'” ในเนื้อหา แต่หัวเอกสารไม่ใช่ใบสั่งซื้อ และไม่มีบาร์โค้ดสินค้า'};
@@ -854,6 +858,7 @@ async function screenPdf(po){
   const res=screenText(txt, head, (po.file_name||'')+' '+(po.email_subject||''));
   res.sig = headSig(head) || fileSig(po);
   // รูปแบบที่ผู้ใช้เคยตอบไว้ มาก่อนเกณฑ์ทั่วไป
+  if(res.result==='svc') return res;   // หัวกระดาษเหมือนใบ P.O. สินค้าจริงของร้านเดียวกัน — ไม่ใช้กฎที่เรียนรู้
   const rule=matchScreenRule(res.sig);
   if(rule && rule.kind==='notpo' && !PO_TITLE.test(normThai(head))) return {result:'not_po', strong:true, sig:res.sig, why:'หน้าตาเหมือนเอกสารที่ผู้ใช้เคยระบุว่าไม่ใช่ P.O.'};
   if(rule && rule.kind==='po' && res.result!=='po') return {result:'po', sig:res.sig, why:'หน้าตาเหมือนใบที่ผู้ใช้เคยรับเป็น P.O.'};
@@ -863,7 +868,7 @@ async function screenPdf(po){
 function screenStale(p){ return !p.screen || (/^(po|unknown)\d*$/.test(p.screen) && p.screen!=='po'+SCREEN_VER && p.screen!=='unknown'+SCREEN_VER); }
 function screenSibling(po){
   return S.pos.find(o=>o.id!==po.id && po.email_link && o.email_link===po.email_link && !['DELETED','SUPERSEDED'].includes(o.status)
-    && o.screen!=='not_po' && (/^po/.test(o.screen||'') || o.screen==='confirmed' || itemsOf(o.id).length));
+    && o.screen!=='not_po' && o.screen!=='svc' && (/^po/.test(o.screen||'') || o.screen==='confirmed' || itemsOf(o.id).length));
 }
 async function runScreening(){
   if(SCREEN_BUSY || !S.user || MODE==='none') return;
@@ -887,7 +892,7 @@ async function runScreening(){
         } else {
           const r=await call('updatePO',{id:cur.id, fields:{screen:res.result}});
           syncPo(Object.assign({}, cur, r, {screen:res.result}));
-          if(res.result==='not_po') flagged++;
+          if(res.result==='not_po' || res.result==='svc') flagged++;
         }
       }catch(e){ console.warn('screen save', e); }
     }
@@ -898,13 +903,13 @@ async function runScreening(){
   }
   if(todo.length===15) setTimeout(runScreening, 1500); else setTimeout(maybeAskReview, 1500);
 }
-function maybeNotPo(po){ return po.screen==='not_po' && !['DELETED','SUPERSEDED'].includes(po.status); }
+function maybeNotPo(po){ return (po.screen==='not_po' || po.screen==='svc') && !['DELETED','SUPERSEDED'].includes(po.status); }
 
 /* ---------- ระบบไม่แน่ใจ → ถามผู้ใช้ด้วยหน้าต่างเด้ง ----------
    not_po (ไม่พบคำว่าใบสั่งซื้อ/บาร์โค้ด และไม่มีใบคู่ในเมลเดียวกัน) หรือ unknown (ไม่มีข้อความ เช่น รูปสแกน)
    รับ P.O. → screen=confirmed (ไม่ถามอีก) / ไม่ใช่ P.O. → ลบออก (กู้คืนได้ที่ “ถูกลบ”) / ดูทีหลัง → ถามใหม่ครั้งหน้าที่เปิดแอป */
 const REVIEW_SKIP=new Set();
-function needsReview(p){ return (p.screen==='not_po' || /^unknown\d*$/.test(p.screen||'')) && !['DELETED','SUPERSEDED','CANCELLED','SHIPPED'].includes(p.status); }
+function needsReview(p){ return (p.screen==='not_po' || p.screen==='svc' || /^unknown\d*$/.test(p.screen||'')) && !['DELETED','SUPERSEDED','CANCELLED','SHIPPED'].includes(p.status); }
 function maybeAskReview(){
   if(!S.user || $('#reviewModal')) return;
   const list=S.pos.filter(p=>needsReview(p) && !REVIEW_SKIP.has(p.id));
@@ -915,6 +920,7 @@ function maybeAskReview(){
 async function openReviewModal(po, left){
   // ใบที่รอตรวจอยู่แล้ว ถ้าหน้าตาเหมือนใบที่ผู้ใช้เพิ่งตอบไป → ตัดสินเองไม่ต้องถาม
   let sig=null;
+  if(po.screen==='svc'){ openReviewModal2(po, left, null); return; }   // ไม่จำ/ไม่ใช้รูปแบบ: หัวกระดาษเหมือนใบ P.O. สินค้าจริง
   try{ await loadScreenRules(); sig=await docSig(po); }catch(e){}
   const rule=matchScreenRule(sig);
   if(rule && !(rule.kind==='notpo' && docSig.poTitle)){ reviewDecide(po, rule.kind==='po', sig, true); setTimeout(maybeAskReview, 600); return; }
@@ -933,11 +939,13 @@ function reviewDecide(po, isPo, sig, auto){
     if(S.detail && S.detail.po.id===po.id) closeDetail();
     toast(auto ? 'ลบ '+(po.po_no||'เอกสาร')+' อัตโนมัติ (หน้าตาเหมือนเอกสารที่ไม่ใช่ P.O.) — กู้คืนได้ที่ “🗑 ถูกลบ”' : 'ลบออกแล้ว — เอกสารหน้าตาแบบนี้ระบบจะลบเองครั้งต่อไป (กู้คืนได้ที่ “🗑 ถูกลบ”)');
   }
-  if(!auto) learnScreen(po, isPo?'po':'notpo', sig);
+  if(!auto && sig) learnScreen(po, isPo?'po':'notpo', sig);
   render();
 }
 function openReviewModal2(po, left, sig){
-  const why = /^unknown/.test(po.screen||'')
+  const why = po.screen==='svc'
+    ? 'ใบนี้เขียนว่า Purchase Order แต่รายการเป็นค่าบริการ/ค่าใช้จ่าย (เช่น Payment Consign, ค่าเช่า, rebate) ไม่มีบาร์โค้ดสินค้า'
+    : /^unknown/.test(po.screen||'')
     ? 'ไฟล์นี้ไม่มีข้อความให้อ่าน (อาจเป็นรูปสแกนหรือแฟกซ์) ระบบจึงตรวจเองไม่ได้'
     : 'หัวเอกสารไม่ได้เขียนว่า “ใบสั่งซื้อ / Purchase Order” และไม่มีบาร์โค้ดสินค้าในไฟล์ ระบบจึงไม่แน่ใจ';
   const md=openModal(`<div class="modal-head">ไฟล์นี้เป็นใบ P.O. หรือไม่?</div><div class="modal-body">
@@ -3326,8 +3334,8 @@ function renderDetail(){
   $$('[data-resolve]',ov2).forEach(b=>b.onclick=()=>resolveDup(b.dataset.resolve));
   $$('[data-restore]',ov2).forEach(b=>b.onclick=()=>restorePo(po.id));
   $$('[data-delpo]',ov2).forEach(b=>b.onclick=()=>deletePo(po.id));
-  $$('[data-screenok]',ov2).forEach(b=>b.onclick=async()=>{ let sig=null; try{ sig=await docSig(po); }catch(e){} reviewDecide(po, true, sig, false); });
-  $$('[data-screennot]',ov2).forEach(b=>b.onclick=async()=>{ let sig=null; try{ sig=await docSig(po); }catch(e){} reviewDecide(po, false, sig, false); });
+  $$('[data-screenok]',ov2).forEach(b=>b.onclick=async()=>{ let sig=null; if(po.screen!=='svc') try{ sig=await docSig(po); }catch(e){} reviewDecide(po, true, sig, false); });
+  $$('[data-screennot]',ov2).forEach(b=>b.onclick=async()=>{ let sig=null; if(po.screen!=='svc') try{ sig=await docSig(po); }catch(e){} reviewDecide(po, false, sig, false); });
   $$('[data-pickpo]',ov2).forEach(b=>b.onclick=()=>openPoPick(po));
   const pt=$('#pdfToggle'); if(pt) pt.onclick=e=>{ if(e.target.closest('#pdfFull')) return; store.set('po.pdfHidden', pdfHidden()?'0':'1'); renderDetail(); };
   $$('[data-pick]').forEach(b=>b.onclick=()=>pickForPo(b.dataset.pick));
@@ -4138,7 +4146,7 @@ function reviewPanel(po){
   if(po.status==='DELETED') return `<div class="panel review del"><div class="row"><span class="t">🗑 P.O. นี้ถูกลบโดย <b>${h(po.deleted_by||'-')}</b> เมื่อ ${h(thDateTime(po.deleted_at))}</span>
       <button class="btn sm primary" data-restore>↺ กู้คืน</button></div></div>`;
   if(maybeNotPo(po)) return `<div class="panel review notpo"><h3>⚠ ไฟล์นี้อาจไม่ใช่ใบ P.O.</h3>
-      <div class="ref">ระบบอ่านไฟล์แล้วไม่พบคำว่า “ใบสั่งซื้อ / Purchase Order / เลข P.O.” และไม่มีบาร์โค้ดสินค้า (เช่น เป็นเอกสารข้อมูลสาขาที่แนบมากับเมล) — ดูไฟล์ด้านล่างแล้วเลือก</div>
+      <div class="ref">${po.screen==='svc'?'ใบนี้เขียนว่า Purchase Order แต่รายการเป็นค่าบริการ/ค่าใช้จ่าย (เช่น Payment Consign, ค่าเช่า, rebate) ไม่ใช่การสั่งสินค้า':'ระบบอ่านไฟล์แล้วไม่พบคำว่า “ใบสั่งซื้อ / Purchase Order / เลข P.O.” และไม่มีบาร์โค้ดสินค้า (เช่น เป็นเอกสารข้อมูลสาขาที่แนบมากับเมล)'} — ดูไฟล์ด้านล่างแล้วเลือก</div>
       <div class="step-actions" style="margin-top:10px"><button class="btn danger" data-screennot>🗑 เอกสารนี้ไม่ใช่ P.O.</button><button class="btn primary" data-screenok>✓ รับ P.O.</button></div></div>`;
   if(po.replaces) return `<div class="panel review new"><div class="row"><span class="t">🔗 <b>อัปเดตจาก P.O. เดิม</b> — ใบนี้ใช้แทนใบเก่าแล้ว</span>
       <button class="btn sm" data-open="${h(po.replaces)}">เปิดใบเดิม</button></div></div>`;
